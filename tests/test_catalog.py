@@ -44,9 +44,10 @@ class ShippedGroups(unittest.TestCase):
         self.assertIn("web", groups)
         self.assertEqual(groups["osint"]["name"], "OSINT")
 
-    def test_no_placeholder_groups(self):
+    def test_expected_groups_present(self):
         groups = catalog.load_groups(GROUPS)
-        self.assertNotIn("exploitation", groups)
+        for g in ("recon", "web", "active-directory", "exploitation", "c2"):
+            self.assertIn(g, groups)
         self.assertNotIn("sniffing", groups)
 
 
