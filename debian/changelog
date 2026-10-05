@@ -1,3 +1,10 @@
+svent-core (0.3.0) unstable; urgency=medium
+
+  * Add the exploitation and c2 tool groups.
+  * Reorder groups into a kill-chain order and refine descriptions.
+
+ -- z1rov <fabian@zirov.net>  Mon, 05 Oct 2026 12:00:00 +0000
+
 svent-core (0.2.0) unstable; urgency=medium
 
   * Add the recon and active-directory tool groups.
