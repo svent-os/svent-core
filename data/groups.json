@@ -10,6 +10,7 @@
     "active-directory": {"name": "Active Directory", "description": "Active Directory and Windows domain enumeration and attacks"},
     "exploitation": {"name": "Exploitation", "description": "Exploit frameworks, exploit search and development"},
     "c2": {"name": "C2", "description": "Command and control and post-exploitation frameworks"},
+    "cloud": {"name": "Cloud", "description": "Cloud and container security (AWS, Azure, GCP, Kubernetes)"},
     "reversing": {"name": "Reversing", "description": "Binary analysis, disassembly and debugging"},
     "forensics": {"name": "Forensics", "description": "Digital forensics, acquisition and artifact analysis"}
   }
