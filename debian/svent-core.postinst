@@ -1,0 +1,19 @@
+#!/bin/sh
+set -e
+
+regen() {
+  if [ -x /usr/libexec/svent/gen-menu ]; then
+    /usr/libexec/svent/gen-menu || true
+  fi
+}
+
+if [ "$1" = "configure" ]; then
+  mkdir -p /usr/share/svent/catalog.d
+  regen
+fi
+
+if [ "$1" = "triggered" ]; then
+  regen
+fi
+
+#DEBHELPER#

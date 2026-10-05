@@ -1,0 +1,6 @@
+svent/*.py usr/lib/svent/svent/
+bin/svent usr/bin/
+bin/svent-run usr/bin/
+bin/svent-wallpaper usr/libexec/svent/
+bin/gen-menu usr/libexec/svent/
+data/groups.json usr/share/svent/

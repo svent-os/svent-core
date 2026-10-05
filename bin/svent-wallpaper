@@ -1,0 +1,152 @@
+#!/bin/sh
+set -eu
+
+BG_DIR="/usr/share/backgrounds/svent"
+STATE="${XDG_CONFIG_HOME:-$HOME/.config}/svent"
+OVERRIDE="$STATE/wallpaper.override"   
+CHOICE="$STATE/wallpaper.choice"       
+DEFAULT_CHOICE="ridge-dark"
+
+usage() {
+  cat <<EOF
+Usage: svent-wallpaper [options]
+  --set DESIGN-APPEARANCE   choose a design and appearance from --list
+  --file PATH               use a custom image for all monitors (override)
+  --clear-override          drop the custom override
+  --list                    list available designs
+  --apply                   re-apply current choice (default action)
+Designs are shared by XFCE and bspwm. Content stays centered on any size.
+EOF
+}
+
+detect_session() {
+  if command -v bspc >/dev/null 2>&1 && bspc query -T -m >/dev/null 2>&1; then
+    echo bspwm
+  elif pgrep -x xfdesktop >/dev/null 2>&1 || [ "${XDG_CURRENT_DESKTOP:-}" = "XFCE" ]; then
+    echo xfce
+  else
+    echo unknown
+  fi
+}
+
+master_for() {
+  echo "$BG_DIR/$1/svent-$2.png"
+}
+
+resolve_choice() {
+  if [ -r "$CHOICE" ]; then cat "$CHOICE"; else echo "$DEFAULT_CHOICE"; fi
+}
+
+apply_xfce() {
+  choice="$1"
+  command -v xfconf-query >/dev/null 2>&1 || { echo "xfconf-query not found" >&2; return 1; }
+  props=$(xfconf-query -c xfce4-desktop -l 2>/dev/null \
+            | grep -E '/backdrop/screen0/monitor.*/workspace[0-9]+/last-image' || true)
+  if [ -z "$props" ]; then
+    echo "no XFCE backdrop properties yet; is xfdesktop running?" >&2
+    return 1
+  fi
+  echo "$props" | while read -r prop; do
+    img=$(wallpaper_file_for_monitor "$prop" "$choice")
+    style_prop=$(echo "$prop" | sed 's#/last-image#/image-style#')
+    xfconf-query -c xfce4-desktop -p "$style_prop" -n -t int -s 5 2>/dev/null \
+      || xfconf-query -c xfce4-desktop -p "$style_prop" -s 5
+    xfconf-query -c xfce4-desktop -p "$prop" -s "$img"
+  done
+}
+
+wallpaper_file_for_monitor() {
+  prop="$1"; choice="$2"
+  mon=$(echo "$prop" | sed -n 's#.*/monitor\([^/]*\)/.*#\1#p')
+  orient=landscape
+  if command -v xrandr >/dev/null 2>&1; then
+    geo=$(xrandr --query 2>/dev/null | awk -v m="$mon" '$0 ~ m" connected"{for(i=1;i<=NF;i++) if($i ~ /[0-9]+x[0-9]+\+/){print $i; exit}}')
+    w=$(echo "$geo" | sed -n 's/\([0-9]*\)x.*/\1/p')
+    h=$(echo "$geo" | sed -n 's/[0-9]*x\([0-9]*\)+.*/\1/p')
+    if [ -n "$w" ] && [ -n "$h" ] && [ "$h" -gt "$w" ]; then orient=portrait; fi
+  fi
+  f=$(master_for "$orient" "$choice")
+  [ -r "$f" ] || f=$(master_for landscape "$choice")
+  echo "$f"
+}
+
+apply_bspwm() {
+  choice="$1"
+  command -v feh >/dev/null 2>&1 || { echo "feh not found" >&2; return 1; }
+  set --
+  mons=$(bspc query -M --names 2>/dev/null || true)
+  if [ -z "$mons" ]; then
+    feh --no-fehbg --bg-fill "$(master_for landscape "$choice")"
+    return 0
+  fi
+  for mon in $mons; do
+    orient=landscape
+    geo=$(xrandr --query 2>/dev/null | awk -v m="$mon" '$0 ~ m" connected"{for(i=1;i<=NF;i++) if($i ~ /[0-9]+x[0-9]+\+/){print $i; exit}}')
+    w=$(echo "$geo" | sed -n 's/\([0-9]*\)x.*/\1/p')
+    h=$(echo "$geo" | sed -n 's/[0-9]*x\([0-9]*\)+.*/\1/p')
+    [ -n "$w" ] && [ -n "$h" ] && [ "$h" -gt "$w" ] && orient=portrait
+    f=$(master_for "$orient" "$choice")
+    [ -r "$f" ] || f=$(master_for landscape "$choice")
+    set -- "$@" --bg-fill "$f"
+  done
+  feh --no-fehbg "$@"
+}
+
+apply() {
+  mkdir -p "$STATE"
+  if [ -r "$OVERRIDE" ]; then
+    custom=$(cat "$OVERRIDE")
+    if [ -r "$custom" ]; then
+      case "$(detect_session)" in
+        bspwm) feh --no-fehbg --bg-fill "$custom" ;;
+        xfce)  apply_single_xfce "$custom" ;;
+        *) echo "unknown session; cannot apply override" >&2; return 1 ;;
+      esac
+      echo "applied custom override: $custom"
+      return 0
+    fi
+    echo "override path missing, ignoring: $custom" >&2
+  fi
+  choice=$(resolve_choice)
+  case "$(detect_session)" in
+    bspwm) apply_bspwm "$choice" ;;
+    xfce)  apply_xfce "$choice" ;;
+    *) echo "no supported session detected (XFCE or bspwm)" >&2; return 1 ;;
+  esac
+  echo "applied: $choice"
+}
+
+apply_single_xfce() {
+  img="$1"
+  xfconf-query -c xfce4-desktop -l 2>/dev/null \
+    | grep -E '/last-image$' | while read -r prop; do
+      style_prop=$(echo "$prop" | sed 's#/last-image#/image-style#')
+      xfconf-query -c xfce4-desktop -p "$style_prop" -s 5 2>/dev/null || true
+      xfconf-query -c xfce4-desktop -p "$prop" -s "$img"
+    done
+}
+
+list_designs() {
+  if [ -d "$BG_DIR/landscape" ]; then
+    for f in "$BG_DIR"/landscape/svent-*.png; do
+      [ -e "$f" ] || continue
+      b=$(basename "$f" .png); echo "${b#svent-}"
+    done
+  else
+    echo "no wallpapers installed under $BG_DIR" >&2
+  fi
+}
+
+[ $# -eq 0 ] && { apply; exit $?; }
+case "$1" in
+  --apply) apply ;;
+  --list) list_designs ;;
+  --set) [ $# -ge 2 ] || { usage; exit 2; }
+         mkdir -p "$STATE"; echo "$2" > "$CHOICE"; apply ;;
+  --file) [ $# -ge 2 ] || { usage; exit 2; }
+          [ -r "$2" ] || { echo "file not readable: $2" >&2; exit 1; }
+          mkdir -p "$STATE"; echo "$2" > "$OVERRIDE"; apply ;;
+  --clear-override) rm -f "$OVERRIDE"; apply ;;
+  -h|--help) usage ;;
+  *) usage; exit 2 ;;
+esac

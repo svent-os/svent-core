@@ -1,0 +1,12 @@
+#!/usr/bin/make -f
+%:
+	dh $@
+
+override_dh_auto_test:
+	python3 -m unittest discover -s tests -v
+
+override_dh_fixperms:
+	dh_fixperms
+	chmod 0755 debian/svent-core/usr/libexec/svent/gen-menu
+	chmod 0755 debian/svent-core/usr/libexec/svent/svent-wallpaper
+	chmod 0755 debian/svent-core/usr/bin/svent debian/svent-core/usr/bin/svent-run

@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "groups": {
+    "web": {"name": "Web", "description": "Web application testing"},
+    "network": {"name": "Network", "description": "Network discovery and analysis"},
+    "wireless": {"name": "Wireless", "description": "Wireless auditing"},
+    "reversing": {"name": "Reversing", "description": "Reverse engineering"},
+    "forensics": {"name": "Forensics", "description": "Digital forensics"},
+    "password-audit": {"name": "Password Audit", "description": "Password auditing"},
+    "osint": {"name": "OSINT", "description": "Open-source intelligence"}
+  }
+}

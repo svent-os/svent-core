@@ -1,0 +1,17 @@
+Source: svent-core
+Section: admin
+Priority: optional
+Maintainer: z1rov <fabian@zirov.net>
+Build-Depends: debhelper-compat (= 13), python3
+Standards-Version: 4.7.0
+Rules-Requires-Root: no
+
+Package: svent-core
+Architecture: all
+Depends: python3 (>= 3.11), ${misc:Depends}
+Recommends: feh, x11-xserver-utils, svent-artwork
+Description: Svent OS system tool, tool catalog engine, and wallpaper selector
+ Provides the svent command, the tool catalog engine that merges per-tool
+ catalog fragments from /usr/share/svent/catalog.d, the menu generator driven
+ by a dpkg trigger, the doctor health checks, and the shared svent-wallpaper
+ selector used by the desktop sessions.

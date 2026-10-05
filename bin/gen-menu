@@ -1,0 +1,103 @@
+#!/usr/bin/python3
+"""Generate the Svent tools application menu from the installed catalog."""
+
+import argparse
+import glob
+import os
+import sys
+
+sys.path.insert(0, os.environ.get("SVENT_LIB", "/usr/lib/svent"))
+from svent import catalog  # noqa: E402
+
+LOGO = "/usr/share/svent/logo/logo-white.png"
+
+
+def write(path, text):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+
+
+def clean(apps, dirs, menus):
+    patterns = [
+        os.path.join(apps, "svent-*.desktop"),
+        os.path.join(dirs, "svent.directory"),
+        os.path.join(dirs, "svent-*.directory"),
+        os.path.join(menus, "svent-tools.menu"),
+    ]
+    for pattern in patterns:
+        for path in glob.glob(pattern):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+
+def tool_desktop(tool):
+    exe = tool["executables"][0]
+    return (
+        "[Desktop Entry]\n"
+        "Type=Application\n"
+        f"Name={tool['name']}\n"
+        f"Comment={tool['description']}\n"
+        f"Exec=svent-run {exe}\n"
+        "Terminal=true\n"
+        "Icon=utilities-terminal\n"
+        f"Categories=X-Svent-{tool['group']};\n"
+    )
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--root", default="/")
+    args = ap.parse_args()
+    data = catalog.load()
+
+    apps = os.path.join(args.root, "usr/share/applications")
+    dirs = os.path.join(args.root, "usr/share/desktop-directories")
+    menus = os.path.join(args.root, "etc/xdg/menus/applications-merged")
+
+    clean(apps, dirs, menus)
+
+    for tool in data["tools"]:
+        write(os.path.join(apps, f"svent-{tool['name']}.desktop"), tool_desktop(tool))
+
+    write(os.path.join(dirs, "svent.directory"),
+          "[Desktop Entry]\nType=Directory\nName=Svent\n"
+          f"Icon={LOGO}\n")
+
+    used = [g for g in data["groups"] if any(t["group"] == g for t in data["tools"])]
+    for group in used:
+        write(os.path.join(dirs, f"svent-{group}.directory"),
+              "[Desktop Entry]\nType=Directory\n"
+              f"Name={data['groups'][group]['name']}\nIcon=applications-other\n")
+
+    submenus = ""
+    for group in used:
+        submenus += (
+            "    <Menu>\n"
+            f"      <Name>{data['groups'][group]['name']}</Name>\n"
+            f"      <Directory>svent-{group}.directory</Directory>\n"
+            "      <Include><And>"
+            f"<Category>X-Svent-{group}</Category>"
+            "</And></Include>\n"
+            "    </Menu>\n"
+        )
+    menu = (
+        '<!DOCTYPE Menu PUBLIC "-//freedesktop//DTD Menu 1.0//EN"\n'
+        ' "http://www.freedesktop.org/standards/menu-spec/menu-1.0.dtd">\n'
+        "<Menu>\n"
+        "  <Name>Applications</Name>\n"
+        "  <Menu>\n"
+        "    <Name>Svent</Name>\n"
+        "    <Directory>svent.directory</Directory>\n"
+        f"{submenus}"
+        "  </Menu>\n"
+        "</Menu>\n"
+    )
+    write(os.path.join(menus, "svent-tools.menu"), menu)
+    print(f"generated menu for {len(data['tools'])} tools in {len(used)} groups")
+
+
+if __name__ == "__main__":
+    main()
