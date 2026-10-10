@@ -8,7 +8,8 @@ Rules-Requires-Root: no
 
 Package: svent-core
 Architecture: all
-Depends: python3 (>= 3.11), ${misc:Depends}
+Replaces: svent-bspwm (<< 0.6.14)
+Depends: zsh, zsh-autosuggestions, zsh-syntax-highlighting, python3 (>= 3.11), ${misc:Depends}
 Recommends: feh, x11-xserver-utils, svent-artwork
 Description: Svent OS system tool, tool catalog engine, and wallpaper selector
  Provides the svent command, the tool catalog engine that merges per-tool

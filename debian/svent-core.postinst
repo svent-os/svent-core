@@ -8,6 +8,13 @@ regen() {
 }
 
 if [ "$1" = "configure" ]; then
+  for home in /root /home/*; do
+    [ -d "$home" ] || continue
+    [ ! -e "$home/.zshrc" ] || continue
+    owner=$(stat -c '%u:%g' "$home")
+    cp -a /etc/skel/.zshrc "$home/.zshrc"
+    chown "$owner" "$home/.zshrc"
+  done
   mkdir -p /usr/share/svent/catalog.d
   regen
 fi

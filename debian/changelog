@@ -1,3 +1,10 @@
+svent-core (0.4.2) unstable; urgency=medium
+
+  * Own the shared Zsh profile for both desktop sessions and new users.
+  * Keep native cat and preserve existing user shell configuration.
+
+ -- z1rov <fabian@zirov.net>  Sat, 10 Oct 2026 00:00:00 -0500
+
 svent-core (0.4.1) unstable; urgency=medium
 
   * Validate catalog field types and preserve unrelated desktop launchers.
