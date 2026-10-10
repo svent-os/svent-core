@@ -1,13 +1,12 @@
-"""Read-only system queries used by the operations engine."""
-
 import glob
 import os
+import re
 import shutil
 import subprocess
 
 
 def installed_version(package):
-    # Returns the installed version or None; never raises for missing dpkg
+
     if not shutil.which("dpkg-query"):
         return None
     proc = subprocess.run(
@@ -28,6 +27,8 @@ def run_functional_test(tool, timeout=30):
                               timeout=timeout, stdin=subprocess.DEVNULL)
     except subprocess.TimeoutExpired:
         return False, "timed out"
+    except OSError as error:
+        return False, str(error)
     output = (proc.stdout + proc.stderr).strip()
     if tool.get("functional_test_any_exit"):
         ok = bool(output)
@@ -58,18 +59,22 @@ def apt_source_files(root="/etc/apt"):
 
 
 def audit_apt_sources(root="/etc/apt"):
-    # Returns a list of problems in APT source definitions
+
     problems = []
     for path in apt_source_files(root):
         with open(path, encoding="utf-8", errors="replace") as fh:
             text = fh.read()
-        lowered = text.lower()
-        for line in lowered.splitlines():
-            line = line.split("#", 1)[0]
-            if "trusted=yes" in line.replace(" ", "") or "trusted: yes" in line:
+        lines = [line.split("#", 1)[0].strip().lower() for line in text.splitlines()]
+        entries = re.split(r"\n\s*\n", "\n".join(lines)) if path.endswith(".sources") else lines
+        for entry in entries:
+            if not entry or re.search(r"(?m)^enabled:\s*no\s*$", entry):
+                continue
+            if not path.endswith(".sources") and not re.match(r"^deb(?:-src)?\s", entry):
+                continue
+            if re.search(r"trusted\s*=\s*yes|(?m:^trusted:\s*yes\s*$)", entry):
                 problems.append(f"{path}: signature checks disabled (trusted=yes)")
-            if "kali.org" in line or "parrot" in line:
+            if "kali.org" in entry or "parrot" in entry:
                 problems.append(f"{path}: foreign distribution repository")
-        if "svent" in lowered and "signed-by" not in lowered:
-            problems.append(f"{path}: Svent source without Signed-By")
+            if ("svent" in entry or "apt.zirov.net" in entry) and not re.search(r"signed-by\s*[=:]\s*\S", entry):
+                problems.append(f"{path}: Svent source without Signed-By")
     return problems

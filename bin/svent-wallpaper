@@ -2,10 +2,12 @@
 set -eu
 
 BG_DIR="/usr/share/backgrounds/svent"
+CATALOG="${SVENT_WALLPAPER_CATALOG:-/usr/share/svent/artwork/wallpapers.json}"
 STATE="${XDG_CONFIG_HOME:-$HOME/.config}/svent"
 OVERRIDE="$STATE/wallpaper.override"   
 CHOICE="$STATE/wallpaper.choice"       
-DEFAULT_CHOICE="ridge-dark"
+DEFAULT_CHOICE="currents-dark"
+GEOMETRY=""
 
 usage() {
   cat <<EOF
@@ -22,7 +24,7 @@ EOF
 detect_session() {
   if command -v bspc >/dev/null 2>&1 && bspc query -T -m >/dev/null 2>&1; then
     echo bspwm
-  elif pgrep -x xfdesktop >/dev/null 2>&1 || [ "${XDG_CURRENT_DESKTOP:-}" = "XFCE" ]; then
+  elif [ "${XDG_CURRENT_DESKTOP:-}" = "XFCE" ] || pgrep -u "$(id -u)" -x xfdesktop >/dev/null 2>&1; then
     echo xfce
   else
     echo unknown
@@ -60,9 +62,9 @@ wallpaper_file_for_monitor() {
   mon=$(echo "$prop" | sed -n 's#.*/monitor\([^/]*\)/.*#\1#p')
   orient=landscape
   if command -v xrandr >/dev/null 2>&1; then
-    geo=$(xrandr --query 2>/dev/null | awk -v m="$mon" '$0 ~ m" connected"{for(i=1;i<=NF;i++) if($i ~ /[0-9]+x[0-9]+\+/){print $i; exit}}')
+    geo=$(printf '%s\n' "$GEOMETRY" | awk -v m="$mon" '$1 == m && $2 == "connected"{for(i=1;i<=NF;i++) if($i ~ /[0-9]+x[0-9]+[+-]/){print $i; exit}}')
     w=$(echo "$geo" | sed -n 's/\([0-9]*\)x.*/\1/p')
-    h=$(echo "$geo" | sed -n 's/[0-9]*x\([0-9]*\)+.*/\1/p')
+    h=$(echo "$geo" | sed -n 's/[0-9]*x\([0-9]*\)[+-].*/\1/p')
     if [ -n "$w" ] && [ -n "$h" ] && [ "$h" -gt "$w" ]; then orient=portrait; fi
   fi
   f=$(master_for "$orient" "$choice")
@@ -81,15 +83,15 @@ apply_bspwm() {
   fi
   for mon in $mons; do
     orient=landscape
-    geo=$(xrandr --query 2>/dev/null | awk -v m="$mon" '$0 ~ m" connected"{for(i=1;i<=NF;i++) if($i ~ /[0-9]+x[0-9]+\+/){print $i; exit}}')
+    geo=$(printf '%s\n' "$GEOMETRY" | awk -v m="$mon" '$1 == m && $2 == "connected"{for(i=1;i<=NF;i++) if($i ~ /[0-9]+x[0-9]+[+-]/){print $i; exit}}')
     w=$(echo "$geo" | sed -n 's/\([0-9]*\)x.*/\1/p')
-    h=$(echo "$geo" | sed -n 's/[0-9]*x\([0-9]*\)+.*/\1/p')
+    h=$(echo "$geo" | sed -n 's/[0-9]*x\([0-9]*\)[+-].*/\1/p')
     [ -n "$w" ] && [ -n "$h" ] && [ "$h" -gt "$w" ] && orient=portrait
     f=$(master_for "$orient" "$choice")
     [ -r "$f" ] || f=$(master_for landscape "$choice")
-    set -- "$@" --bg-fill "$f"
+    set -- "$@" "$f"
   done
-  feh --no-fehbg "$@"
+  feh --no-fehbg --bg-fill "$@"
 }
 
 apply() {
@@ -108,6 +110,10 @@ apply() {
     echo "override path missing, ignoring: $custom" >&2
   fi
   choice=$(resolve_choice)
+  [ -r "$(master_for landscape "$choice")" ] || { echo "wallpaper unavailable: $choice" >&2; return 1; }
+  if command -v xrandr >/dev/null 2>&1; then
+    GEOMETRY=$(xrandr --query 2>/dev/null || true)
+  fi
   case "$(detect_session)" in
     bspwm) apply_bspwm "$choice" ;;
     xfce)  apply_xfce "$choice" ;;
@@ -118,8 +124,9 @@ apply() {
 
 apply_single_xfce() {
   img="$1"
-  xfconf-query -c xfce4-desktop -l 2>/dev/null \
-    | grep -E '/last-image$' | while read -r prop; do
+  props=$(xfconf-query -c xfce4-desktop -l 2>/dev/null | grep -E '/backdrop/screen[0-9]+/monitor.*/workspace[0-9]+/last-image$' || true)
+  [ -n "$props" ] || { echo "no XFCE backdrop properties available" >&2; return 1; }
+  printf '%s\n' "$props" | while read -r prop; do
       style_prop=$(echo "$prop" | sed 's#/last-image#/image-style#')
       xfconf-query -c xfce4-desktop -p "$style_prop" -s 5 2>/dev/null || true
       xfconf-query -c xfce4-desktop -p "$prop" -s "$img"
@@ -127,6 +134,18 @@ apply_single_xfce() {
 }
 
 list_designs() {
+  if [ -r "$CATALOG" ]; then
+    python3 - "$CATALOG" "$BG_DIR" <<'PY'
+import json
+import sys
+from pathlib import Path
+data = json.loads(Path(sys.argv[1]).read_text())
+for item in data["wallpapers"]:
+    if (Path(sys.argv[2]) / "landscape" / ("svent-" + item["id"] + ".png")).is_file():
+        print(item["id"])
+PY
+    return
+  fi
   if [ -d "$BG_DIR/landscape" ]; then
     for f in "$BG_DIR"/landscape/svent-*.png; do
       [ -e "$f" ] || continue
@@ -142,10 +161,13 @@ case "$1" in
   --apply) apply ;;
   --list) list_designs ;;
   --set) [ $# -ge 2 ] || { usage; exit 2; }
-         mkdir -p "$STATE"; echo "$2" > "$CHOICE"; apply ;;
+         case "$2" in ""|*[!a-z0-9-]*) echo "invalid wallpaper identifier" >&2; exit 2 ;; esac
+         [ -r "$(master_for landscape "$2")" ] || { echo "wallpaper unavailable: $2" >&2; exit 1; }
+         mkdir -p "$STATE"; printf '%s\n' "$2" > "$CHOICE.tmp"; mv "$CHOICE.tmp" "$CHOICE"; rm -f "$OVERRIDE"; apply ;;
   --file) [ $# -ge 2 ] || { usage; exit 2; }
-          [ -r "$2" ] || { echo "file not readable: $2" >&2; exit 1; }
-          mkdir -p "$STATE"; echo "$2" > "$OVERRIDE"; apply ;;
+          [ -f "$2" ] && [ -r "$2" ] || { echo "file not readable: $2" >&2; exit 1; }
+          custom=$(python3 -c 'import os, sys; print(os.path.abspath(sys.argv[1]))' "$2")
+          mkdir -p "$STATE"; printf '%s\n' "$custom" > "$OVERRIDE.tmp"; mv "$OVERRIDE.tmp" "$OVERRIDE"; apply ;;
   --clear-override) rm -f "$OVERRIDE"; apply ;;
   -h|--help) usage ;;
   *) usage; exit 2 ;;

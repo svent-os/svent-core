@@ -2,5 +2,10 @@
 [ $# -gt 0 ] || exit 0
 "$@"
 status=$?
-printf '\n[svent] %s exited (%s). Press Enter to close.' "$1" "$status"
-read -r _
+if [ -t 0 ] && [ -t 1 ]; then
+  printf '\n[SventOS] %s exited (%s).\n' "$1" "$status"
+  shell="${SHELL:-/bin/sh}"
+  [ -x "$shell" ] || shell=/bin/sh
+  exec "$shell" -i
+fi
+exit "$status"

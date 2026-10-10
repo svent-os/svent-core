@@ -1,3 +1,14 @@
+svent-core (0.4.1) unstable; urgency=medium
+
+  * Validate catalog field types and preserve unrelated desktop launchers.
+  * Generate SventOS menus with tracked files and atomic writes.
+  * Validate wallpaper choices, clear custom overrides and cache monitor geometry.
+  * Use the canonical artwork default and keep interactive tool terminals open.
+  * Run wallpaper regression tests during package builds.
+  * Audit active APT entries individually and report catalog health failures.
+
+ -- z1rov <fabian@zirov.net>  Sat, 10 Oct 2026 00:30:00 -0500
+
 svent-core (0.4.0) unstable; urgency=medium
 
   * Add the cloud tool group.

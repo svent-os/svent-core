@@ -1,103 +1,89 @@
 #!/usr/bin/python3
-"""Generate the Svent tools application menu from the installed catalog."""
-
 import argparse
-import glob
+import json
 import os
 import sys
+from pathlib import Path
+from xml.sax.saxutils import escape
 
 sys.path.insert(0, os.environ.get("SVENT_LIB", "/usr/lib/svent"))
-from svent import catalog  # noqa: E402
+from svent import catalog
 
 LOGO = "/usr/share/svent/logo/logo-white.png"
-
+LOCATIONS = ("usr/share/applications", "usr/share/desktop-directories", "etc/xdg/menus/applications-merged")
 
 def write(path, text):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(text)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.is_file() and path.read_text(encoding="utf-8") == text:
+        return
+    temporary = path.with_name(path.name + ".svent-tmp")
+    temporary.write_text(text, encoding="utf-8", newline="\n")
+    temporary.replace(path)
 
-
-def clean(apps, dirs, menus):
-    patterns = [
-        os.path.join(apps, "svent-*.desktop"),
-        os.path.join(dirs, "svent.directory"),
-        os.path.join(dirs, "svent-*.directory"),
-        os.path.join(menus, "svent-tools.menu"),
-    ]
-    for pattern in patterns:
-        for path in glob.glob(pattern):
-            try:
-                os.remove(path)
-            except OSError:
-                pass
-
+def desktop_text(value):
+    return value.replace("\\", "\\\\").replace("\n", "\\n").replace("\r", "\\r")
 
 def tool_desktop(tool):
-    exe = tool["executables"][0]
-    return (
-        "[Desktop Entry]\n"
-        "Type=Application\n"
-        f"Name={tool['name']}\n"
-        f"Comment={tool['description']}\n"
-        f"Exec=svent-run {exe}\n"
-        "Terminal=true\n"
-        "Icon=utilities-terminal\n"
-        f"Categories=X-Svent-{tool['group']};\n"
-    )
+    return ("[Desktop Entry]\nType=Application\n"
+            f"Name={desktop_text(tool['name'])}\nComment={desktop_text(tool['description'])}\n"
+            f"Exec=svent-run {tool['executables'][0]}\nTerminal=true\nIcon=utilities-terminal\n"
+            f"Categories=X-Svent-{tool['group']};\n")
 
+def previous_files(root, manifest):
+    if manifest.is_file():
+        names = json.loads(manifest.read_text(encoding="utf-8"))
+        if not isinstance(names, list):
+            raise ValueError("Invalid generated menu manifest")
+        return {name for name in names if isinstance(name, str) and Path(name).parent.as_posix() in LOCATIONS
+                and Path(name).name.startswith("svent")}
+    return {path.relative_to(root).as_posix() for path in (root / LOCATIONS[0]).glob("svent-*.desktop")
+            if "\nExec=svent-run " in path.read_text(encoding="utf-8")}
+
+def generate(root, data=None, clean=False):
+    root = Path(root)
+    manifest = root / "var/lib/svent/generated-menu.json"
+    previous = previous_files(root, manifest)
+    files = {}
+    if not clean:
+        for tool in data["tools"]:
+            files[f"{LOCATIONS[0]}/svent-{tool['name']}.desktop"] = tool_desktop(tool)
+        files[f"{LOCATIONS[1]}/svent.directory"] = f"[Desktop Entry]\nType=Directory\nName=SventOS\nIcon={LOGO}\n"
+        submenus = []
+        for group, meta in data["groups"].items():
+            if not any(tool["group"] == group for tool in data["tools"]):
+                continue
+            files[f"{LOCATIONS[1]}/svent-{group}.directory"] = f"[Desktop Entry]\nType=Directory\nName={desktop_text(meta['name'])}\nIcon=applications-other\n"
+            submenus.append(f"<Menu><Name>{escape(meta['name'])}</Name><Directory>svent-{group}.directory</Directory>"
+                            f"<Include><Category>X-Svent-{group}</Category></Include></Menu>")
+        files[f"{LOCATIONS[2]}/svent-tools.menu"] = ('<!DOCTYPE Menu PUBLIC "-//freedesktop//DTD Menu 1.0//EN" '
+            '"http://www.freedesktop.org/standards/menu-spec/menu-1.0.dtd">\n'
+            '<Menu><Name>Applications</Name><Menu><Name>SventOS</Name><Directory>svent.directory</Directory>'
+            + "".join(submenus) + "</Menu></Menu>\n")
+    for name, text in files.items():
+        write(root / name, text)
+    for name in previous - files.keys():
+        (root / name).unlink(missing_ok=True)
+    if clean:
+        manifest.unlink(missing_ok=True)
+    else:
+        write(manifest, json.dumps(sorted(files), indent=2) + "\n")
 
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--root", default="/")
-    args = ap.parse_args()
-    data = catalog.load()
-
-    apps = os.path.join(args.root, "usr/share/applications")
-    dirs = os.path.join(args.root, "usr/share/desktop-directories")
-    menus = os.path.join(args.root, "etc/xdg/menus/applications-merged")
-
-    clean(apps, dirs, menus)
-
-    for tool in data["tools"]:
-        write(os.path.join(apps, f"svent-{tool['name']}.desktop"), tool_desktop(tool))
-
-    write(os.path.join(dirs, "svent.directory"),
-          "[Desktop Entry]\nType=Directory\nName=Svent\n"
-          f"Icon={LOGO}\n")
-
-    used = [g for g in data["groups"] if any(t["group"] == g for t in data["tools"])]
-    for group in used:
-        write(os.path.join(dirs, f"svent-{group}.directory"),
-              "[Desktop Entry]\nType=Directory\n"
-              f"Name={data['groups'][group]['name']}\nIcon=applications-other\n")
-
-    submenus = ""
-    for group in used:
-        submenus += (
-            "    <Menu>\n"
-            f"      <Name>{data['groups'][group]['name']}</Name>\n"
-            f"      <Directory>svent-{group}.directory</Directory>\n"
-            "      <Include><And>"
-            f"<Category>X-Svent-{group}</Category>"
-            "</And></Include>\n"
-            "    </Menu>\n"
-        )
-    menu = (
-        '<!DOCTYPE Menu PUBLIC "-//freedesktop//DTD Menu 1.0//EN"\n'
-        ' "http://www.freedesktop.org/standards/menu-spec/menu-1.0.dtd">\n'
-        "<Menu>\n"
-        "  <Name>Applications</Name>\n"
-        "  <Menu>\n"
-        "    <Name>Svent</Name>\n"
-        "    <Directory>svent.directory</Directory>\n"
-        f"{submenus}"
-        "  </Menu>\n"
-        "</Menu>\n"
-    )
-    write(os.path.join(menus, "svent-tools.menu"), menu)
-    print(f"generated menu for {len(data['tools'])} tools in {len(used)} groups")
-
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--root", type=Path, default=Path("/"))
+    parser.add_argument("--clean", action="store_true")
+    args = parser.parse_args()
+    try:
+        data = None if args.clean else catalog.load()
+        generate(args.root, data, args.clean)
+        if data:
+            for warning in data["warnings"]:
+                print(warning, file=sys.stderr)
+            print(f"Generated SventOS menu for {len(data['tools'])} tools")
+        return 0
+    except (OSError, ValueError, catalog.CatalogError) as error:
+        print(f"SventOS menu generation failed: {error}", file=sys.stderr)
+        return 1
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

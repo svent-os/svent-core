@@ -1,5 +1,4 @@
 #!/bin/sh
-# Test svent-wallpaper selection logic with stubbed desktop commands.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 sel="$here/../bin/svent-wallpaper"
@@ -16,7 +15,6 @@ for c in grid-dark grid-light orbit-dark; do
   : > "$bg/portrait/svent-$c.png"
 done
 
-# Stub binaries that record their arguments
 cat > "$stub/feh" <<EOF
 #!/bin/sh
 echo "feh \$*" >> "$log"
@@ -30,6 +28,7 @@ esac
 EOF
 cat > "$stub/xrandr" <<EOF
 #!/bin/sh
+echo xrandr >> "$work/geometry-log"
 echo "LANDSCAPEMON connected 2560x1440+0+0"
 echo "PORTRAITMON connected 1080x1920+2560+0"
 EOF
@@ -37,41 +36,51 @@ chmod +x "$stub"/*
 
 export PATH="$stub:$PATH"
 export HOME="$work/home"; export XDG_CONFIG_HOME="$work/home/.config"
+export SVENT_WALLPAPER_CATALOG="$work/catalog.json"
 mkdir -p "$XDG_CONFIG_HOME"
 
-# Point the script at our test background dir and force bspwm path
 run() {
   BG_DIR_TEST="$bg" sh -c '
     sed "s#^BG_DIR=.*#BG_DIR=\"$BG_DIR_TEST\"#" "$0" > "$1/sel"
-    sh "$1/sel" "$2" ${3:-}
+    sh "$1/sel" "$2" "${3:-}"
   ' "$sel" "$work" "$@"
 }
 
 check() { if eval "$2"; then echo "PASS: $1"; else echo "FAIL: $1"; fails=$((fails+1)); fi; }
 
-# --list should show the three installed designs
 out=$(run --list)
 check "list shows grid-dark" 'echo "$out" | grep -q grid-dark'
 check "list shows orbit-dark" 'echo "$out" | grep -q orbit-dark'
 
-# bspwm apply: landscape monitor gets landscape master, portrait gets portrait
 : > "$log"
 run --set grid-dark >/dev/null
 fehline=$(cat "$log")
-check "feh called bg-fill twice" '[ "$(grep -c bg-fill "$log")" -ge 1 ]'
+check "feh called once for all monitors" '[ "$(wc -l < "$log")" -eq 1 ]'
+check "monitor geometry queried once" '[ "$(wc -l < "$work/geometry-log")" -eq 1 ]'
 check "landscape master used" 'echo "$fehline" | grep -q "landscape/svent-grid-dark.png"'
 check "portrait master used for tall monitor" 'echo "$fehline" | grep -q "portrait/svent-grid-dark.png"'
 
-# choice persists
+printf '%s\n' '{"wallpapers":[{"id":"grid-dark"},{"id":"orbit-dark"}]}' > "$SVENT_WALLPAPER_CATALOG"
+out=$(run --list)
+check "catalog excludes unlisted aliases" '! echo "$out" | grep -q grid-light'
+
 check "choice persisted" 'grep -q grid-dark "$XDG_CONFIG_HOME/svent/wallpaper.choice"'
 
-# override wins and uses the custom file
 custom="$work/custom.png"; : > "$custom"
 : > "$log"
 run --file "$custom" >/dev/null
 check "override uses custom file" 'grep -q "custom.png" "$log"'
 
-# missing custom file is rejected (non-zero)
+: > "$log"
+run --set grid-light >/dev/null
+check "built-in selection clears override" '[ ! -e "$XDG_CONFIG_HOME/svent/wallpaper.override" ]'
+check "built-in selection applies after override" 'grep -q "svent-grid-light.png" "$log"'
+if run --set missing-design >/dev/null 2>&1; then
+  fails=$((fails+1))
+else
+  check "invalid selection preserves choice" 'grep -q grid-light "$XDG_CONFIG_HOME/svent/wallpaper.choice"'
+fi
+
 if run --file "$work/nope.png" >/dev/null 2>&1; then
   echo "FAIL: missing override accepted"; fails=$((fails+1))
 else

@@ -1,5 +1,3 @@
-"""Tool catalog: fixed groups plus per-tool drop-in fragments."""
-
 import glob
 import json
 import os
@@ -46,6 +44,8 @@ def load_groups(path=None):
         if isinstance(meta, str):
             groups[gid] = {"name": gid, "description": meta}
         elif isinstance(meta, dict):
+            if not isinstance(meta.get("name", gid), str) or not isinstance(meta.get("description", ""), str):
+                raise CatalogError(f"invalid group definition: {gid}")
             groups[gid] = {"name": meta.get("name", gid),
                            "description": meta.get("description", "")}
         else:
@@ -60,6 +60,16 @@ def validate_tool(tool, group_ids):
     if missing:
         return [f"missing {', '.join(missing)}"]
     errors = []
+    for key in ("name", "group", "description", "packaging", "package", "official_source", "version_policy"):
+        if not isinstance(tool[key], str) or not tool[key].strip():
+            errors.append(f"{key} must be a non-empty string")
+    for key in ("executables", "functional_test"):
+        if not isinstance(tool[key], list) or not tool[key] or not all(isinstance(value, str) and value for value in tool[key]):
+            errors.append(f"{key} must be a non-empty string list")
+    if errors:
+        return errors
+    if tool.get("schema", 1) != 1:
+        errors.append("unsupported schema version")
     if not NAME_RE.match(tool["name"]) or not NAME_RE.match(tool["package"]):
         errors.append("invalid name or package")
     if tool["group"] not in group_ids:
@@ -82,6 +92,8 @@ def validate_tool(tool, group_ids):
 def validate(data):
     if not isinstance(data, dict) or data.get("schema") != 1:
         return ["unsupported or missing schema version"]
+    if not isinstance(data.get("groups", {}), dict) or not isinstance(data.get("tools", []), list):
+        return ["groups must be an object and tools must be a list"]
     group_ids = set(data.get("groups", {}))
     errors = []
     seen = set()

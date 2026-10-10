@@ -12,7 +12,7 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, ROOT)
 GROUPS = os.path.join(ROOT, "data", "groups.json")
 
-from svent import catalog, cli, system  # noqa: E402
+from svent import catalog, cli, system
 
 
 def sample_tool(name="nmap", group="network", package=None, exe=None):
@@ -59,6 +59,19 @@ class Validation(unittest.TestCase):
 
     def test_valid_tool(self):
         self.assertEqual(catalog.validate_tool(sample_tool(), self.ids), [])
+
+    def test_malformed_field_types(self):
+        for key, value in (("name", None), ("group", []), ("official_source", None),
+                           ("executables", "nmap"), ("functional_test", ["nmap", 7])):
+            with self.subTest(key=key):
+                tool = sample_tool()
+                tool[key] = value
+                self.assertTrue(catalog.validate_tool(tool, self.ids))
+
+    def test_unsupported_fragment_schema(self):
+        tool = sample_tool()
+        tool["schema"] = 99
+        self.assertTrue(catalog.validate_tool(tool, self.ids))
 
     def test_rejects_shell_metacharacters(self):
         bad = sample_tool()
@@ -136,6 +149,16 @@ class Merge(unittest.TestCase):
 
 
 class AptAudit(unittest.TestCase):
+    def test_signed_by_is_checked_per_entry(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.write(root, "svent.sources", "Types: deb\nURIs: https://apt.zirov.net\nSigned-By: /key.gpg\n\nTypes: deb\nURIs: https://apt.zirov.net\n")
+            self.assertEqual(len(system.audit_apt_sources(root)), 1)
+
+    def test_disabled_deb822_is_ignored(self):
+        with tempfile.TemporaryDirectory() as root:
+            self.write(root, "off.sources", "Types: deb\nURIs: https://apt.zirov.net\nEnabled: no\nTrusted: yes\n")
+            self.assertEqual(system.audit_apt_sources(root), [])
+
     def write(self, root, name, text):
         os.makedirs(os.path.join(root, "sources.list.d"), exist_ok=True)
         with open(os.path.join(root, "sources.list.d", name), "w") as fh:

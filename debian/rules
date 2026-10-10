@@ -4,6 +4,7 @@
 
 override_dh_auto_test:
 	python3 -m unittest discover -s tests -v
+	sh tests/test_wallpaper.sh
 
 override_dh_fixperms:
 	dh_fixperms

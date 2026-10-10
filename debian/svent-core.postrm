@@ -2,15 +2,24 @@
 set -e
 
 if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
-  rm -f /usr/share/applications/svent-*.desktop
-  rm -f /usr/share/desktop-directories/svent.directory
-  rm -f /usr/share/desktop-directories/svent-*.directory
-  rm -f /etc/xdg/menus/applications-merged/svent-tools.menu
+  python3 - <<'PY'
+import json
+from pathlib import Path
+manifest = Path("/var/lib/svent/generated-menu.json")
+locations = {"/usr/share/applications", "/usr/share/desktop-directories", "/etc/xdg/menus/applications-merged"}
+if manifest.is_file():
+    for name in json.loads(manifest.read_text()):
+        path = Path("/") / name
+        if str(path.parent) in locations and path.name.startswith("svent"):
+            path.unlink(missing_ok=True)
+    manifest.unlink()
+PY
 fi
 
 if [ "$1" = "purge" ]; then
   rmdir /usr/share/svent/catalog.d 2>/dev/null || true
   rmdir /usr/share/svent 2>/dev/null || true
+  rmdir /var/lib/svent 2>/dev/null || true
 fi
 
 #DEBHELPER#

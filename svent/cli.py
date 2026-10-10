@@ -1,5 +1,3 @@
-"""Command-line interface for Svent OS."""
-
 import argparse
 import json
 import sys
@@ -109,16 +107,18 @@ def cmd_doctor(args, data):
     print(f"[ok]   catalog valid: {len(data['tools'])} tools")
     for warning in data.get("warnings", []):
         print(f"[warn] catalog: {warning}")
-    for issue in system.audit_apt_sources():
+        problems += 1
+    issues = system.audit_apt_sources()
+    for issue in issues:
         print(f"[fail] {issue}")
         problems += 1
-    if not problems:
+    if not issues:
         print("[ok]   APT sources: no unsafe entries found")
     return 1 if problems else 0
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(prog="svent", description="Svent OS system tool")
+    parser = argparse.ArgumentParser(prog="svent", description="SventOS system tool")
     parser.add_argument("--version", action="version", version=f"svent {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
 

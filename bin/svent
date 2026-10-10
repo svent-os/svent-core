@@ -1,8 +1,8 @@
 #!/usr/bin/python3
-# Entry point installed as /usr/bin/svent
+
 import sys
 
 sys.path.insert(0, "/usr/lib/svent")
-from svent.cli import main  # noqa: E402
+from svent.cli import main
 
 sys.exit(main())

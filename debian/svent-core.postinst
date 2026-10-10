@@ -3,7 +3,7 @@ set -e
 
 regen() {
   if [ -x /usr/libexec/svent/gen-menu ]; then
-    /usr/libexec/svent/gen-menu || true
+    /usr/libexec/svent/gen-menu || echo "SventOS menu generation failed; run /usr/libexec/svent/gen-menu to retry." >&2
   fi
 }
 
