@@ -80,6 +80,9 @@ def validate_tool(tool, group_ids):
         errors.append("unknown version policy")
     if not tool["official_source"].startswith("https://"):
         errors.append("official_source must use https")
+    desktop_file = tool.get("desktop_file")
+    if desktop_file is not None and (not isinstance(desktop_file, str) or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9+._-]*\.desktop", desktop_file)):
+        errors.append("desktop_file must be a desktop filename")
     exes = tool["executables"]
     if not exes or not all(isinstance(e, str) and NAME_RE.match(e) for e in exes):
         errors.append("invalid executables")

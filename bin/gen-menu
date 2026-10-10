@@ -46,7 +46,8 @@ def generate(root, data=None, clean=False):
     files = {}
     if not clean:
         for tool in data["tools"]:
-            files[f"{LOCATIONS[0]}/svent-{tool['name']}.desktop"] = tool_desktop(tool)
+            if not tool.get("desktop_file"):
+                files[f"{LOCATIONS[0]}/svent-{tool['name']}.desktop"] = tool_desktop(tool)
         files[f"{LOCATIONS[1]}/svent.directory"] = f"[Desktop Entry]\nType=Directory\nName=SventOS\nIcon={LOGO}\n"
         submenus = []
         for group, meta in data["groups"].items():
