@@ -60,6 +60,16 @@ class Validation(unittest.TestCase):
     def test_valid_tool(self):
         self.assertEqual(catalog.validate_tool(sample_tool(), self.ids), [])
 
+    def test_accepts_upstream_command_case(self):
+        tool = sample_tool("bloodyad", exe=["bloodyAD", "bloodyad"])
+        self.assertEqual(catalog.validate_tool(tool, self.ids), [])
+
+    def test_rejects_executable_paths_and_shell_syntax(self):
+        for executable in ("../bloodyAD", "/usr/bin/bloodyAD", "bloodyAD;id", "bloodyAD\\x", "bloodyAD\n"):
+            with self.subTest(executable=executable):
+                tool = sample_tool("bloodyad", exe=[executable])
+                self.assertTrue(catalog.validate_tool(tool, self.ids))
+
     def test_malformed_field_types(self):
         for key, value in (("name", None), ("group", []), ("official_source", None),
                            ("executables", "nmap"), ("functional_test", ["nmap", 7])):

@@ -6,6 +6,7 @@ import re
 GROUPS_PATH = "/usr/share/svent/groups.json"
 CATALOG_DIR = "/usr/share/svent/catalog.d"
 NAME_RE = re.compile(r"^[a-z0-9][a-z0-9+.-]*$")
+COMMAND_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_+.-]*$")
 REQUIRED = ("name", "group", "description", "packaging", "package",
             "executables", "official_source", "version_policy",
             "functional_test")
@@ -84,7 +85,7 @@ def validate_tool(tool, group_ids):
     if desktop_file is not None and (not isinstance(desktop_file, str) or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9+._-]*\.desktop", desktop_file)):
         errors.append("desktop_file must be a desktop filename")
     exes = tool["executables"]
-    if not exes or not all(isinstance(e, str) and NAME_RE.match(e) for e in exes):
+    if not exes or not all(isinstance(e, str) and COMMAND_RE.fullmatch(e) for e in exes):
         errors.append("invalid executables")
     test = tool["functional_test"]
     if not test or test[0] not in exes:
