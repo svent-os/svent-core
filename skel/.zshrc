@@ -44,3 +44,5 @@ if [ -f /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ]; then
   ZSH_HIGHLIGHT_STYLES[arg]='fg=251,bold'
   ZSH_HIGHLIGHT_STYLES[unknown-token]='fg=210,bold'
 fi
+
+source /usr/share/svent/zsh/history.zsh

@@ -10,10 +10,17 @@ regen() {
 if [ "$1" = "configure" ]; then
   for home in /root /home/*; do
     [ -d "$home" ] || continue
-    [ ! -e "$home/.zshrc" ] || continue
     owner=$(stat -c '%u:%g' "$home")
-    cp -a /etc/skel/.zshrc "$home/.zshrc"
-    chown "$owner" "$home/.zshrc"
+    if [ ! -e "$home/.zshrc" ]; then
+      cp -a /etc/skel/.zshrc "$home/.zshrc"
+      chown "$owner" "$home/.zshrc"
+    elif ! grep -Fxq 'source /usr/share/svent/zsh/history.zsh' "$home/.zshrc"; then
+      backup_directory="$home/.local/state/svent-core/zsh-before-0.4.5"
+      mkdir -p "$backup_directory"
+      [ -e "$backup_directory/zshrc" ] || cp -a "$home/.zshrc" "$backup_directory/zshrc"
+      printf '\nsource /usr/share/svent/zsh/history.zsh\n' >> "$home/.zshrc"
+      chown "$owner" "$backup_directory" "$backup_directory/zshrc"
+    fi
   done
   mkdir -p /usr/share/svent/catalog.d
   regen
