@@ -1,3 +1,9 @@
+svent-core (0.4.6) unstable; urgency=medium
+
+  * Enable Ctrl Left and Ctrl Right word navigation in shared Zsh keymaps.
+
+ -- z1rov <fabian@zirov.net>  Mon, 12 Oct 2026 18:00:00 -0500
+
 svent-core (0.4.5) unstable; urgency=medium
 
   * Add prefix history navigation without replacing existing Zsh profiles.
