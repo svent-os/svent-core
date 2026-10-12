@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 import select
 import shlex
@@ -6,6 +7,19 @@ import shutil
 import subprocess
 import time
 import unittest
+
+
+def prompt_ready(data):
+    plain = re.sub(rb'\x1b\[[0-?]*[ -/]*[@-~]', b'', data)
+    return plain.endswith(b'SVENT_NAV_READY> ')
+
+
+class PromptTests(unittest.TestCase):
+    def test_prompt_with_terminal_control_sequences(self):
+        self.assertTrue(prompt_ready(b'\r\x1b[0m\x1b[JSVENT_NAV_READY> \x1b[K\x1b[?2004h'))
+
+    def test_echoed_setup_is_not_a_ready_prompt(self):
+        self.assertFalse(prompt_ready(b"PS1='SVENT_NAV_READY> '; RPS1=''\r\n"))
 
 
 @unittest.skipUnless(os.name == 'posix' and shutil.which('zsh'), 'Requires Zsh and a POSIX terminal')
@@ -29,19 +43,16 @@ class NavigationTests(unittest.TestCase):
                             mode = '-e' if keymap == 'emacs' else '-v'
                             setup = f"bindkey {mode}; source {shlex.quote(str(source))}; svent_capture() {{ print -r -- \"SVENT_RESULT:$BUFFER:$CURSOR\"; BUFFER=; }}; zle -N svent_capture; bindkey -M {keymap} '^G' svent_capture; PS1='SVENT_NAV_READY> '; RPS1=''\n"
                             os.write(master, setup.encode())
-                            output = self.read_until(master, lambda data: data.endswith(b'SVENT_NAV_READY> '))
-                            self.assertTrue(output.endswith(b'SVENT_NAV_READY> '), output)
+                            output = self.read_until(master, prompt_ready)
+                            self.assertTrue(prompt_ready(output), output)
                             os.write(master, b'alpha beta' + sequence + b'\x07')
                             expected = f'SVENT_RESULT:alpha beta:{cursor}'.encode()
                             result = self.read_until(master, lambda data: expected in data)
                             self.assertIn(expected, result)
                         finally:
-                            process.terminate()
-                            try:
-                                process.wait(timeout=3)
-                            except subprocess.TimeoutExpired:
+                            if process.poll() is None:
                                 process.kill()
-                                process.wait()
+                            process.wait(timeout=3)
                             os.close(master)
 
     def read_until(self, descriptor, complete):
