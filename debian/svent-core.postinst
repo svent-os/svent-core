@@ -8,6 +8,7 @@ regen() {
 }
 
 if [ "$1" = "configure" ]; then
+  python3 /usr/libexec/svent/configure-shell
   for home in /root /home/*; do
     [ -d "$home" ] || continue
     owner=$(stat -c '%u:%g' "$home")
@@ -23,6 +24,9 @@ if [ "$1" = "configure" ]; then
     fi
   done
   mkdir -p /usr/share/svent/catalog.d
+  if [ -d /run/systemd/system ] && [ "$(stat -c '%d:%i' /)" = "$(stat -Lc '%d:%i' /proc/1/root 2>/dev/null)" ]; then
+    sysctl -p /usr/lib/sysctl.d/90-svent-ping.conf >/dev/null || echo 'SventOS ping configuration will be applied at the next boot.' >&2
+  fi
   regen
 fi
 

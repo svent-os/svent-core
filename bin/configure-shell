@@ -1,0 +1,37 @@
+#!/usr/bin/python3
+import argparse
+from pathlib import Path
+import shutil
+
+
+INTEGRATION = '[ -r /usr/share/svent/zsh/history.zsh ] && source /usr/share/svent/zsh/history.zsh'
+
+
+def configure(root):
+    root = Path(root).resolve()
+    path = root / 'etc/zsh/zshrc'
+    if not path.parent.resolve().is_relative_to(root):
+        raise RuntimeError('The global Zsh directory escapes the selected root.')
+    if path.is_symlink():
+        raise RuntimeError('The global Zsh configuration cannot be a symbolic link.')
+    text = path.read_text() if path.exists() else ''
+    if INTEGRATION in text.splitlines():
+        return
+    backup = root / 'var/lib/svent-core/zshrc.before-navigation'
+    backup.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() and not backup.exists():
+        shutil.copy2(path, backup)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + '.svent-tmp')
+    if temporary.exists() or temporary.is_symlink():
+        raise RuntimeError('The temporary shell configuration already exists.')
+    with temporary.open('x') as stream:
+        stream.write(text + ('' if not text or text.endswith('\n') else '\n') + INTEGRATION + '\n')
+    temporary.chmod(path.stat().st_mode & 0o777 if path.exists() else 0o644)
+    temporary.replace(path)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--root', type=Path, default=Path('/'))
+    configure(parser.parse_args().root)

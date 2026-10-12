@@ -6,3 +6,5 @@ bin/gen-menu usr/libexec/svent/
 data/groups.json usr/share/svent/
 skel/.zshrc etc/skel/
 data/zsh/history.zsh usr/share/svent/zsh/
+data/sysctl/90-svent-ping.conf usr/lib/sysctl.d/
+bin/configure-shell usr/libexec/svent/

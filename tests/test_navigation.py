@@ -30,7 +30,7 @@ class NavigationTests(unittest.TestCase):
         def controlling_terminal():
             fcntl.ioctl(0, termios.TIOCSCTTY, 0)
         source = Path(__file__).resolve().parents[1] / 'data/zsh/history.zsh'
-        for keymap in ('emacs', 'viins'):
+        for keymap in ('emacs', 'viins', 'main'):
             for left, right in ((b'\x1b[1;5D', b'\x1b[1;5C'), (b'\x1b[5D', b'\x1b[5C')):
                 for sequence, cursor in ((left, 6), (left + right, 10)):
                     with self.subTest(keymap=keymap, sequence=sequence):
@@ -40,8 +40,10 @@ class NavigationTests(unittest.TestCase):
                                                    env={**os.environ, 'TERM': 'xterm-256color'})
                         os.close(slave)
                         try:
-                            mode = '-e' if keymap == 'emacs' else '-v'
+                            mode = '-v' if keymap == 'viins' else '-e'
                             setup = f"bindkey {mode}; source {shlex.quote(str(source))}; svent_capture() {{ print -r -- \"SVENT_RESULT:$BUFFER:$CURSOR\"; BUFFER=; }}; zle -N svent_capture; bindkey -M {keymap} '^G' svent_capture; PS1='SVENT_NAV_READY> '; RPS1=''\n"
+                            if keymap == 'main':
+                                setup = setup.rstrip('\n') + "; bindkey -N svent-custom emacs; bindkey -A svent-custom main; bindkey -M main -r '^[[1;5D' '^[[1;5C' '^[[5D' '^[[5C'\n"
                             os.write(master, setup.encode())
                             output = self.read_until(master, prompt_ready)
                             self.assertTrue(prompt_ready(output), output)
