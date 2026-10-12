@@ -9,6 +9,14 @@ regen() {
 
 if [ "$1" = "configure" ]; then
   python3 /usr/libexec/svent/configure-shell
+  python3 /usr/libexec/svent/configure-browser
+  if [ -x /usr/bin/firefox-esr ]; then
+    for alternative in x-www-browser gnome-www-browser; do
+      if update-alternatives --list "$alternative" 2>/dev/null | grep -Fxq /usr/bin/firefox-esr; then
+        update-alternatives --set "$alternative" /usr/bin/firefox-esr
+      fi
+    done
+  fi
   for home in /root /home/*; do
     [ -d "$home" ] || continue
     owner=$(stat -c '%u:%g' "$home")

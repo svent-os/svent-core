@@ -1,3 +1,10 @@
+svent-core (0.4.8) unstable; urgency=medium
+
+  * Set Firefox ESR as the default browser for URLs, HTML and desktop helpers.
+  * Preserve existing browser configuration before migrating user defaults.
+
+ -- z1rov <fabian@zirov.net>  Mon, 12 Oct 2026 18:30:00 -0500
+
 svent-core (0.4.7) unstable; urgency=medium
 
   * Load shared navigation for interactive Zsh sessions and active keymaps.

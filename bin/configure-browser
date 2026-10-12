@@ -1,0 +1,78 @@
+#!/usr/bin/python3
+import configparser
+import os
+from pathlib import Path
+import shutil
+import io
+
+
+def directory(path, home, uid, gid):
+    missing = []
+    current = path
+    while current != home and not current.exists():
+        missing.append(current)
+        current = current.parent
+    path.mkdir(parents=True, exist_ok=True)
+    for item in missing:
+        os.chown(item, uid, gid)
+
+
+def configure(home, uid, gid):
+    home = Path(home)
+    files = [
+        ('.config/mimeapps.list', 'Default Applications', {
+            'x-scheme-handler/http': 'firefox-esr.desktop;',
+            'x-scheme-handler/https': 'firefox-esr.desktop;',
+            'text/html': 'firefox-esr.desktop;',
+            'application/xhtml+xml': 'firefox-esr.desktop;'}),
+        ('.config/xfce4/helpers.rc', None, {'WebBrowser': 'custom-WebBrowser'})]
+    for relative, section, values in files:
+        path = home / relative
+        if path.is_symlink() or not path.parent.resolve().is_relative_to(home.resolve()):
+            raise RuntimeError('Unsafe browser configuration path: ' + str(path))
+        original = path.read_text() if path.exists() else ''
+        parser = configparser.ConfigParser(interpolation=None, strict=False)
+        parser.optionxform = str
+        parser.read_string(original if section else '[Helpers]\n' + original)
+        group = section or 'Helpers'
+        if not parser.has_section(group):
+            parser.add_section(group)
+        if all(parser.get(group, key, fallback=None) == value for key, value in values.items()):
+            continue
+        backup = home / '.local/state/svent-core/browser-before-0.4.8' / relative
+        if path.exists() and not backup.exists():
+            directory(backup.parent, home, uid, gid)
+            shutil.copy2(path, backup)
+            os.chown(backup, uid, gid)
+        for key, value in values.items():
+            parser.set(group, key, value)
+        directory(path.parent, home, uid, gid)
+        output = io.StringIO()
+        parser.write(output)
+        text = output.getvalue()
+        if not section:
+            text = text.removeprefix('[Helpers]\n')
+        path.write_text(text)
+        os.chown(path, uid, gid)
+    helper = home / '.local/share/xfce4/helpers/custom-WebBrowser.desktop'
+    if helper.is_symlink() or not helper.parent.resolve().is_relative_to(home.resolve()):
+        raise RuntimeError('Unsafe browser helper path.')
+    contents = '[Desktop Entry]\nVersion=1.0\nType=X-XFCE-Helper\nName=Firefox ESR\nX-XFCE-Category=WebBrowser\nX-XFCE-Commands=firefox-esr;\nX-XFCE-CommandsWithParameter=firefox-esr "%s";\n'
+    if helper.exists() and helper.read_text() != contents:
+        backup = home / '.local/state/svent-core/browser-before-0.4.8/.local/share/xfce4/helpers/custom-WebBrowser.desktop'
+        if not backup.exists():
+            directory(backup.parent, home, uid, gid)
+            shutil.copy2(helper, backup)
+            os.chown(backup, uid, gid)
+    directory(helper.parent, home, uid, gid)
+    helper.write_text(contents)
+    os.chown(helper, uid, gid)
+
+
+if __name__ == '__main__':
+    import pwd
+    for account in pwd.getpwall():
+        if account.pw_uid == 0 or (1000 <= account.pw_uid < 65534 and account.pw_dir.startswith('/home/')):
+            if Path(account.pw_dir).is_dir():
+                configure(account.pw_dir, account.pw_uid, account.pw_gid)
+    configure('/etc/skel', 0, 0)
