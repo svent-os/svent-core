@@ -104,7 +104,8 @@ def xfce_values(scale):
                       ('/Gdk/WindowScalingFactor', 'int', 1),
                       ('/Gtk/CursorThemeSize', 'int', round(24 * scale))],
         'xfce4-panel': [('/panels/panel-1/size', 'uint', round(36 * scale)),
-                        ('/panels/panel-1/icon-size', 'uint', round(24 * scale))],
+                        ('/panels/panel-1/icon-size', 'uint', round(24 * scale)),
+                        ('/plugins/plugin-910/size-max', 'uint', round(20 * scale))],
         'xfce4-desktop': [('/desktop-icons/icon-size', 'uint', round(40 * scale))]}
 
 
