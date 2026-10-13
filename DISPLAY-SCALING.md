@@ -1,6 +1,6 @@
 # Automatic display scaling
 
-Polybar restarts release their launcher lock before the bar process starts. Window padding is calculated from the configured bar height, vertical offset and scaled gap; Polybar struts are disabled to avoid reserving the same area twice. The generated configuration targets the primary output. All modules and separators stay visible at every scale. The original user configuration remains intact.
+Polybar restarts release their launcher lock before the bar process starts. Window padding is calculated from the configured bar height and vertical offset; BSPWM's existing window gap provides the separation below the bar. Polybar struts are disabled to avoid reserving the same area twice. The generated configuration targets the primary output. All modules and separators stay visible at every scale. The original user configuration remains intact.
 
 SventOS XFCE and BSPWM use a shared X11 display service. It chooses the active primary output, or the first active output if no primary is configured. Scaling is based on that output's resolution relative to 1920x1080, rounded to 25 percent increments and limited to 100–250 percent. Portrait modes are normalized before comparison. Ultrawide displays use the smaller dimension ratio, so extra horizontal space does not enlarge the interface excessively.
 

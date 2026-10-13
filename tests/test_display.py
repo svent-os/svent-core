@@ -20,7 +20,14 @@ class DisplayTests(unittest.TestCase):
         layout = bar_layout(config, 2)
         self.assertEqual(layout['height'], 80)
         self.assertEqual(layout['offset'], 20)
-        self.assertEqual(layout['top_padding'], 116)
+        self.assertEqual(layout['top_padding'], 100)
+
+    def test_bar_reserves_its_bottom_edge_without_adding_another_gap(self):
+        config = '[bar/example]\nheight = 34px\noffset-y = 8px\n'
+        for scale in (1, 1.25, 2):
+            with self.subTest(scale=scale):
+                layout = bar_layout(config, scale)
+                self.assertEqual(layout['top_padding'], layout['height'] + layout['offset'])
 
     def test_scale_preserves_all_modules_and_separators(self):
         config = '[bar/example]\nmodules-left = date divider network\nmodules-right = target divider power\nenable-struts = true\n'

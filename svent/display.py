@@ -137,7 +137,7 @@ def bar_layout(text, scale):
         match = re.fullmatch(r'(\d+)(?:px)?', value.strip())
         return round(int(match[1]) * scale) if match else round(default * scale)
     return {'height': pixels('height', 34), 'offset': pixels('offset-y', 8),
-            'top_padding': pixels('height', 34) + pixels('offset-y', 8) + round(8 * scale)}
+            'top_padding': pixels('height', 34) + pixels('offset-y', 8)}
 
 
 def polybar_config(text, scale, home):
