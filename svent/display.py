@@ -7,7 +7,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import signal
 import subprocess
 import sys
 import time
@@ -129,7 +128,7 @@ def apply_xfce(scale):
         Xfconf.shutdown()
 
 
-def bar_layout(text, scale, width=1920):
+def bar_layout(text, scale):
     parser = configparser.ConfigParser(interpolation=None, strict=False)
     parser.read_string(text)
     section = next((name for name in parser.sections() if name.startswith('bar/')), None)
@@ -138,13 +137,11 @@ def bar_layout(text, scale, width=1920):
         match = re.fullmatch(r'(\d+)(?:px)?', value.strip())
         return round(int(match[1]) * scale) if match else round(default * scale)
     return {'height': pixels('height', 34), 'offset': pixels('offset-y', 8),
-            'gap': round(9 * scale), 'top_padding': pixels('height', 34) + pixels('offset-y', 8) + round(8 * scale),
-            'edge': round(3 * scale), 'compact': width / scale < 1100}
+            'top_padding': pixels('height', 34) + pixels('offset-y', 8) + round(8 * scale)}
 
 
-def polybar_config(text, scale, home, width=1920):
+def polybar_config(text, scale, home):
     pixel_keys = {'height', 'offset-y', 'radius', 'padding-left', 'padding-right'}
-    layout = bar_layout(text, scale, width)
     lines = []
     for line in text.splitlines():
         if line.startswith('[bar/'):
@@ -152,10 +149,6 @@ def polybar_config(text, scale, home, width=1920):
             continue
         if re.match(r'^\s*(dpi|enable-struts)\s*=', line):
             continue
-        if layout['compact'] and line.startswith('modules-left ='):
-            line = 'modules-left = date network'
-        if layout['compact'] and line.startswith('modules-right ='):
-            line = 'modules-right = power'
         match = re.match(r'^(\s*)([\w-]+)(\s*=\s*)(\d+)(px)?$', line)
         if match and match[2] in pixel_keys:
             line = f'{match[1]}{match[2]}{match[3]}{round(int(match[4]) * scale)}{match[5] or ""}'
@@ -168,39 +161,35 @@ def polybar_config(text, scale, home, width=1920):
     return '\n'.join(lines) + '\n'
 
 
-def bspwm_settings(home, scale):
-    parser = configparser.ConfigParser(interpolation=None)
-    parser.read(home / '.config/gtk-3.0/settings.ini')
-    values = {'Net/ThemeName': parser.get('Settings', 'gtk-theme-name', fallback='Greybird-dark'),
-              'Net/IconThemeName': parser.get('Settings', 'gtk-icon-theme-name', fallback='Svent'),
-              'Gtk/FontName': parser.get('Settings', 'gtk-font-name', fallback='Sans 10')}
-    return ''.join(key + ' ' + json.dumps(value) + '\n' for key, value in values.items()) + f'Xft/DPI {round(96 * scale * 1024)}\nGtk/CursorThemeSize {round(24 * scale)}\n'
-
-
 def apply_bspwm(home, folder, scale, outputs):
     output = primary_output(outputs)
-    width = output['width'] if output else 1920
     source = home / '.config/polybar/config.ini'
-    layout = bar_layout('', scale, width)
+    layout = bar_layout('', scale)
     if source.is_file():
         original = source.read_text()
-        layout = bar_layout(original, scale, width)
-        contents = polybar_config(original, scale, home, width)
+        layout = bar_layout(original, scale)
+        contents = polybar_config(original, scale, home)
         modules = home / '.config/polybar/modules.ini'
         if modules.is_file():
             scaled_modules = folder / 'polybar-modules.ini'
             scaled_modules.write_text(re.sub(r'(\d+)px', lambda m: str(round(int(m[1]) * scale)) + 'px', modules.read_text()))
             contents = contents.replace(modules.as_posix(), scaled_modules.as_posix())
         (folder / 'polybar.ini').write_text(contents)
-    for key, value in [('top_padding', layout['top_padding']), ('window_gap', layout['gap']),
-                       ('bottom_padding', layout['edge']), ('left_padding', layout['edge']), ('right_padding', layout['edge'])]:
-        run(['bspc', 'config', key, str(value)])
+    run(['bspc', 'config', 'top_padding', str(layout['top_padding'])])
     launch = home / '.config/polybar/launch.sh'
     if launch.is_file():
         environment = os.environ.copy()
         if output:
             environment['MONITOR'] = output['name']
         subprocess.Popen(['bash', str(launch)], env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def apply_display(home, folder, desktop, scale, outputs):
+    if desktop == 'xfce':
+        run(['xrdb', '-merge'], f'Xft.dpi: {round(96 * scale)}\nXcursor.size: {round(24 * scale)}\n')
+        apply_xfce(scale)
+    else:
+        apply_bspwm(home, folder, scale, outputs)
 
 
 def watch(desktop):
@@ -214,54 +203,32 @@ def watch(desktop):
         home = Path.home()
         previous = None
         failures = 0
-        xsettings = None
-        try:
-            while True:
-                try:
-                    desktop = (folder / 'desktop').read_text().strip()
-                    config = settings(home)
-                    outputs = detect()
-                    if config.get('mode', 'auto') == 'manual':
-                        if xsettings is not None:
-                            xsettings.terminate()
-                            xsettings.wait(timeout=2)
-                            xsettings = None
-                        previous = None
-                        time.sleep(3)
-                        continue
-                    scale = float(config.get('scale', choose_scale(outputs)))
-                    signature = (desktop, scale, json.dumps(outputs, sort_keys=True))
-                    if signature != previous:
-                        run(['xrdb', '-merge'], f'Xft.dpi: {round(96 * scale)}\nXcursor.size: {round(24 * scale)}\n')
-                        if desktop == 'xfce':
-                            if xsettings is not None:
-                                xsettings.terminate()
-                                xsettings.wait(timeout=2)
-                                xsettings = None
-                            apply_xfce(scale)
-                        else:
-                            path = folder / 'xsettingsd.conf'
-                            path.write_text(bspwm_settings(home, scale))
-                            if xsettings is None or xsettings.poll() is not None:
-                                xsettings = subprocess.Popen(['xsettingsd', '-c', str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                            else:
-                                xsettings.send_signal(signal.SIGHUP)
-                            apply_bspwm(home, folder, scale, outputs)
-                        state_write(folder, {'desktop': desktop, 'scale': scale, 'dpi': round(96 * scale), 'outputs': outputs})
-                        previous = signature
-                    elif desktop == 'xfce':
-                        apply_xfce(scale)
-                    failures = 0
-                except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
-                    print('SventOS display: ' + str(error), file=sys.stderr, flush=True)
-                    failures += 1
-                    if failures >= 3:
-                        return
-                time.sleep(3)
-        finally:
-            if xsettings is not None and xsettings.poll() is None:
-                xsettings.terminate()
-                xsettings.wait(timeout=2)
+        while True:
+            try:
+                desktop = (folder / 'desktop').read_text().strip()
+                config = settings(home)
+                outputs = detect()
+                if config.get('mode', 'auto') == 'manual':
+                    previous = None
+                    time.sleep(3)
+                    continue
+                scale = float(config.get('scale', choose_scale(outputs)))
+                signature = (desktop, scale, json.dumps(outputs, sort_keys=True))
+                if signature != previous:
+                    apply_display(home, folder, desktop, scale, outputs)
+                    state_write(folder, {'desktop': desktop, 'scale': scale,
+                                         'scope': 'desktop' if desktop == 'xfce' else 'bar',
+                                         'outputs': outputs})
+                    previous = signature
+                elif desktop == 'xfce':
+                    apply_xfce(scale)
+                failures = 0
+            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+                print('SventOS display: ' + str(error), file=sys.stderr, flush=True)
+                failures += 1
+                if failures >= 3:
+                    return
+            time.sleep(3)
 
 
 def main():
@@ -283,7 +250,7 @@ def main():
         if args.desktop == 'xfce':
             for channel, properties in xfce_values(scale).items():
                 xml_values(Path.home(), channel, properties)
-        run(['xrdb', '-merge'], f'Xft.dpi: {round(96 * scale)}\n')
+            run(['xrdb', '-merge'], f'Xft.dpi: {round(96 * scale)}\n')
     (folder / 'desktop').write_text(args.desktop)
     with (folder / 'watch.log').open('a') as log:
         subprocess.Popen([sys.executable, '/usr/libexec/svent/display-scale', 'watch', args.desktop], stdin=subprocess.DEVNULL, stdout=log, stderr=log, start_new_session=True)

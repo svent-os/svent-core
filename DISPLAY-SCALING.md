@@ -1,6 +1,6 @@
 # Automatic display scaling
 
-Polybar restarts release their launcher lock before the bar process starts. Window padding is calculated from the configured bar height, vertical offset and scaled gap; Polybar struts are disabled to avoid reserving the same area twice. The generated configuration targets the primary output. Below a logical width of 1100 pixels, the bar keeps the date, network, workspaces and power control while reducing secondary modules. The original user configuration remains intact.
+Polybar restarts release their launcher lock before the bar process starts. Window padding is calculated from the configured bar height, vertical offset and scaled gap; Polybar struts are disabled to avoid reserving the same area twice. The generated configuration targets the primary output. All modules and separators stay visible at every scale. The original user configuration remains intact.
 
 SventOS XFCE and BSPWM use a shared X11 display service. It chooses the active primary output, or the first active output if no primary is configured. Scaling is based on that output's resolution relative to 1920x1080, rounded to 25 percent increments and limited to 100–250 percent. Portrait modes are normalized before comparison. Ultrawide displays use the smaller dimension ratio, so extra horizontal space does not enlarge the interface excessively.
 
@@ -14,11 +14,11 @@ SventOS XFCE and BSPWM use a shared X11 display service. It chooses the active p
 
 This is a resolution-based desktop policy, not a measurement of physical display density. Virtual displays often report unreliable physical dimensions. A single shared scale follows the primary monitor; mixed-DPI monitors do not receive independent scales in these X11 sessions.
 
-XFCE prepares its settings before session startup. The watcher updates logical DPI, panel height, panel icons, desktop icons and cursor size. BSPWM uses X resources and an owned xsettingsd process for GTK/Qt DPI. Polybar fonts and dimensions are generated from the original configuration into the runtime directory, and window gaps and top padding follow the same scale. Kitty and Rofi use logical DPI instead of multiplied font sizes. Application support for live DPI updates varies; an application that caches DPI may need to be reopened.
+XFCE prepares its settings before session startup. The watcher updates logical DPI, panel height, panel icons, desktop icons and cursor size. BSPWM adjusts only Polybar fonts, dimensions, internal spacing and the top padding reserved for the bar. It does not modify application DPI, terminal fonts or normal window gaps. Generated bar files live in the runtime directory; the original configuration stays intact. Application support for live DPI updates varies; an application that caches DPI may need to be reopened.
 
 The watcher checks display geometry every three seconds, applies changes only as needed, and stops after repeated display failures. XFCE settings are rechecked to account for panel startup. Only one watcher runs per X display. It does not alter resolution, stretch the framebuffer, enable the compositor or start an NTP or display-manager service.
 
-Original XFCE XML files are preserved once in `~/.local/state/svent-display/before-auto-scaling/`. User Polybar files are never rewritten. Diagnostics are in `$XDG_RUNTIME_DIR/svent-display-*/state.json` and `watch.log`.
+Original XFCE XML files are preserved once in `~/.local/state/svent-display/before-auto-scaling/`. User Polybar files are never rewritten. For BSPWM, the recorded scale describes the bar rather than the applications. Diagnostics are in `$XDG_RUNTIME_DIR/svent-display-*/state.json` and `watch.log`.
 
 To leave scaling under manual desktop control, create `~/.config/svent/display.json` containing:
 

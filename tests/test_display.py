@@ -1,27 +1,33 @@
 from pathlib import Path
 import shutil
 import unittest
+from unittest.mock import patch
 import uuid
-from svent.display import bar_layout, choose_scale, monitors, polybar_config, settings, xfce_values, xml_values
+from svent.display import apply_display, bar_layout, choose_scale, monitors, polybar_config, settings, xfce_values, xml_values
 import xml.etree.ElementTree as ET
 
 
 class DisplayTests(unittest.TestCase):
+    def test_bspwm_adjustment_does_not_change_application_dpi(self):
+        with patch('svent.display.run') as command, patch('svent.display.apply_bspwm') as bar, patch('svent.display.apply_xfce') as xfce:
+            apply_display(Path('/home/example'), Path('/run/example'), 'bspwm', 2, [])
+            bar.assert_called_once()
+            command.assert_not_called()
+            xfce.assert_not_called()
+
     def test_bar_window_spacing_follows_actual_dimensions(self):
         config = '[bar/example]\nheight = 40px\noffset-y = 10px\n'
-        layout = bar_layout(config, 2, 3840)
+        layout = bar_layout(config, 2)
         self.assertEqual(layout['height'], 80)
         self.assertEqual(layout['offset'], 20)
         self.assertEqual(layout['top_padding'], 116)
-        self.assertEqual(layout['gap'], 18)
-        self.assertFalse(layout['compact'])
 
-    def test_narrow_bar_reduces_modules_without_changing_normal_layout(self):
+    def test_scale_preserves_all_modules_and_separators(self):
         config = '[bar/example]\nmodules-left = date divider network\nmodules-right = target divider power\nenable-struts = true\n'
-        small = polybar_config(config, 1, Path('/home/example'), 800)
-        normal = polybar_config(config, 1, Path('/home/example'), 1920)
-        self.assertIn('modules-left = date network', small)
-        self.assertIn('modules-right = power', small)
+        large = polybar_config(config, 2, Path('/home/example'))
+        normal = polybar_config(config, 1, Path('/home/example'))
+        self.assertIn('modules-left = date divider network', large)
+        self.assertIn('modules-right = target divider power', large)
         self.assertIn('modules-right = target divider power', normal)
         self.assertIn('enable-struts = false', normal)
         self.assertNotIn('enable-struts = true', normal)
