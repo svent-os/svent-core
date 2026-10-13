@@ -198,9 +198,64 @@ def initialize_bspwm(home, folder):
         launch_bar(home, outputs, original=True)
         return
     scale = float(config.get('scale', choose_scale(outputs)))
+    prepare_bspwm_apps(home, folder, scale)
     apply_bspwm(home, folder, scale, outputs)
-    state_write(folder, {'desktop': 'bspwm', 'scale': scale, 'scope': 'bar',
+    state_write(folder, {'desktop': 'bspwm', 'scale': scale, 'scope': 'bar-and-applications',
                          'outputs': outputs, 'sizing': 'session-start'})
+
+
+def scale_rofi_pixels(text, scale):
+    return re.sub(r'(?<![\w.#])(-?\d+(?:\.\d+)?)px\b',
+                  lambda match: f'{round(float(match[1]) * scale)}px', text)
+
+
+def prepare_bspwm_apps(home, folder, scale):
+    result = run(['xrdb', '-merge'], f'Xft.dpi: {round(96 * scale)}\nXcursor.size: {round(24 * scale)}\n')
+    if result.returncode:
+        raise RuntimeError('Could not configure session font DPI')
+    source = home / '.config/rofi'
+    target = folder / 'rofi'
+    if source.is_dir():
+        for path in source.rglob('*.rasi'):
+            if path.is_symlink() or not path.resolve().is_relative_to(source.resolve()):
+                continue
+            destination = target / path.relative_to(source)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            contents = scale_rofi_pixels(path.read_text(), scale)
+            contents = contents.replace(source.as_posix() + '/', target.as_posix() + '/')
+            destination.write_text(contents)
+
+
+def rofi_arguments(home, folder, args):
+    args = list(args)
+    state = folder / 'state.json'
+    if not state.is_file() or not (folder / 'desktop').is_file() or (folder / 'desktop').read_text().strip() != 'bspwm':
+        return args
+    record = json.loads(state.read_text())
+    if record.get('scope') != 'bar-and-applications' or settings(home).get('mode') == 'manual':
+        return args
+    scale = float(record['scale'])
+    source = home / '.config/rofi'
+    target = folder / 'rofi'
+    for index, argument in enumerate(args[:-1]):
+        if argument in ('-theme', '-config'):
+            path = Path(os.path.expanduser(args[index + 1]))
+            if path.is_absolute() and path.is_relative_to(source):
+                generated = target / path.relative_to(source)
+                if generated.is_file():
+                    args[index + 1] = str(generated)
+        elif argument == '-theme-str':
+            args[index + 1] = scale_rofi_pixels(args[index + 1], scale)
+    if '-config' not in args and '-no-config' not in args and (target / 'config.rasi').is_file():
+        args = ['-config', str(target / 'config.rasi')] + args
+    if '-dpi' not in args:
+        args = ['-dpi', str(round(96 * scale))] + args
+    return args
+
+
+def rofi_main():
+    args = rofi_arguments(Path.home(), runtime(), sys.argv[1:])
+    os.execvp('rofi', ['rofi'] + args)
 
 
 def apply_display(home, folder, desktop, scale, outputs):

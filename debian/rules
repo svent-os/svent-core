@@ -13,5 +13,6 @@ override_dh_fixperms:
 	chmod 0755 debian/svent-core/usr/libexec/svent/configure-shell
 	chmod 0755 debian/svent-core/usr/libexec/svent/configure-browser
 	chmod 0755 debian/svent-core/usr/libexec/svent/display-scale
+	chmod 0755 debian/svent-core/usr/bin/svent-rofi
 	chmod 0755 debian/svent-core/usr/libexec/svent/svent-wallpaper
 	chmod 0755 debian/svent-core/usr/bin/svent debian/svent-core/usr/bin/svent-run

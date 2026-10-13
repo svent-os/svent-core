@@ -3,18 +3,57 @@ import shutil
 import unittest
 from unittest.mock import patch
 import uuid
-from svent.display import apply_display, bar_layout, choose_scale, initialize_bspwm, main, monitors, polybar_config, settings, watch, xfce_values, xml_values
+from svent.display import apply_display, bar_layout, choose_scale, initialize_bspwm, main, monitors, polybar_config, prepare_bspwm_apps, rofi_arguments, scale_rofi_pixels, settings, watch, xfce_values, xml_values
 import xml.etree.ElementTree as ET
 
 
 class DisplayTests(unittest.TestCase):
     def test_bspwm_initialization_detects_and_applies_only_once(self):
         outputs = [{'name': 'Virtual1', 'primary': True, 'width': 3840, 'height': 2160}]
-        with patch('svent.display.settings', return_value={'mode': 'auto'}), patch('svent.display.detect', return_value=outputs) as detect, patch('svent.display.apply_bspwm') as bar, patch('svent.display.state_write') as record:
+        with patch('svent.display.settings', return_value={'mode': 'auto'}), patch('svent.display.detect', return_value=outputs) as detect, patch('svent.display.prepare_bspwm_apps') as apps, patch('svent.display.apply_bspwm') as bar, patch('svent.display.state_write') as record:
             initialize_bspwm(Path('/home/example'), Path('/run/example'))
             detect.assert_called_once()
+            apps.assert_called_once_with(Path('/home/example'), Path('/run/example'), 2)
             bar.assert_called_once_with(Path('/home/example'), Path('/run/example'), 2, outputs)
             self.assertEqual(record.call_args.args[1]['sizing'], 'session-start')
+
+    def test_rofi_dimensions_scale_without_scaling_em_or_percent_twice(self):
+        original = 'width: 27em; height: 50%; padding: 12px 16px; color: #123456; spacing: 1.5px;'
+        self.assertEqual(scale_rofi_pixels(original, 2),
+                         'width: 27em; height: 50%; padding: 24px 32px; color: #123456; spacing: 3px;')
+
+    def test_session_themes_preserve_originals_and_do_not_accumulate(self):
+        import json
+        home = Path(__file__).resolve().parents[1] / ('display-test-' + uuid.uuid4().hex)
+        source = home / '.config/rofi'
+        folder = home / 'runtime'
+        source.mkdir(parents=True)
+        folder.mkdir()
+        original = 'configuration { font: "MesloLGS NF 10"; } window { width: 27em; padding: 12px; }'
+        (source / 'config.rasi').write_text(original)
+        (folder / 'desktop').write_text('bspwm')
+        (folder / 'state.json').write_text(json.dumps({'scope': 'bar-and-applications', 'scale': 2}))
+        try:
+            with patch('svent.display.run') as command:
+                command.return_value.returncode = 0
+                prepare_bspwm_apps(home, folder, 2)
+                prepare_bspwm_apps(home, folder, 1.25)
+                self.assertEqual(command.call_args.args[1], 'Xft.dpi: 120\nXcursor.size: 30\n')
+            self.assertEqual((source / 'config.rasi').read_text(), original)
+            self.assertIn('padding: 15px;', (folder / 'rofi/config.rasi').read_text())
+            args = rofi_arguments(home, folder, ['-show', 'drun'])
+            self.assertEqual(args[:2], ['-dpi', '192'])
+            self.assertIn(str(folder / 'rofi/config.rasi'), args)
+            args = rofi_arguments(home, folder, ['-no-config', '-theme', str(source / 'config.rasi'), '-theme-str', 'window { width: 200px; }'])
+            self.assertNotIn('-config', args)
+            self.assertIn(str(folder / 'rofi/config.rasi'), args)
+            self.assertIn('window { width: 400px; }', args)
+            manual = home / '.config/svent/display.json'
+            manual.parent.mkdir()
+            manual.write_text('{"mode":"manual"}')
+            self.assertEqual(rofi_arguments(home, folder, ['-show', 'drun']), ['-show', 'drun'])
+        finally:
+            shutil.rmtree(home)
 
     def test_bspwm_watch_action_returns_without_polling(self):
         with patch('svent.display.runtime'), patch('svent.display.initialize_bspwm') as initialize, patch('svent.display.time.sleep') as sleep:

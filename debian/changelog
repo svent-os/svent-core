@@ -1,3 +1,9 @@
+svent-core (0.4.15) unstable; urgency=medium
+
+  * Apply application font DPI and generate proportional Rofi themes once at BSPWM startup.
+
+ -- z1rov <fabian@zirov.net>  Tue, 13 Oct 2026 12:30:00 -0500
+
 svent-core (0.4.14) unstable; urgency=medium
 
   * Calculate BSPWM bar sizes once at session startup without a background watcher.
