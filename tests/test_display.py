@@ -2,11 +2,30 @@ from pathlib import Path
 import shutil
 import unittest
 import uuid
-from svent.display import choose_scale, monitors, polybar_config, settings, xfce_values, xml_values
+from svent.display import bar_layout, choose_scale, monitors, polybar_config, settings, xfce_values, xml_values
 import xml.etree.ElementTree as ET
 
 
 class DisplayTests(unittest.TestCase):
+    def test_bar_window_spacing_follows_actual_dimensions(self):
+        config = '[bar/example]\nheight = 40px\noffset-y = 10px\n'
+        layout = bar_layout(config, 2, 3840)
+        self.assertEqual(layout['height'], 80)
+        self.assertEqual(layout['offset'], 20)
+        self.assertEqual(layout['top_padding'], 116)
+        self.assertEqual(layout['gap'], 18)
+        self.assertFalse(layout['compact'])
+
+    def test_narrow_bar_reduces_modules_without_changing_normal_layout(self):
+        config = '[bar/example]\nmodules-left = date divider network\nmodules-right = target divider power\nenable-struts = true\n'
+        small = polybar_config(config, 1, Path('/home/example'), 800)
+        normal = polybar_config(config, 1, Path('/home/example'), 1920)
+        self.assertIn('modules-left = date network', small)
+        self.assertIn('modules-right = power', small)
+        self.assertIn('modules-right = target divider power', normal)
+        self.assertIn('enable-struts = false', normal)
+        self.assertNotIn('enable-struts = true', normal)
+
     def test_supported_resolutions_and_portrait(self):
         for width, height, expected in [(1280, 720, 1), (1920, 1080, 1), (2560, 1440, 1.25),
                                         (3840, 2160, 2), (7680, 4320, 2.5), (2160, 3840, 2),

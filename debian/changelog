@@ -1,3 +1,10 @@
+svent-core (0.4.11) unstable; urgency=medium
+
+  * Derive BSPWM window spacing from the scaled bar geometry.
+  * Keep the bar on the primary output and compact it on narrow screens.
+
+ -- z1rov <fabian@zirov.net>  Tue, 13 Oct 2026 03:00:00 -0500
+
 svent-core (0.4.10) unstable; urgency=medium
 
   * Scale the XFCE tray icon limit with the primary display.

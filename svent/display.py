@@ -24,10 +24,14 @@ def monitors(text):
     return outputs
 
 
+def primary_output(outputs):
+    return next((item for item in outputs if item['primary']), outputs[0]) if outputs else None
+
+
 def choose_scale(outputs):
     if not outputs:
         return 1.0
-    output = next((item for item in outputs if item['primary']), outputs[0])
+    output = primary_output(outputs)
     long, short = sorted((output['width'], output['height']), reverse=True)
     ratio = min(long / 1920, short / 1080)
     return min(2.5, max(1.0, math.floor(ratio * 4 + 0.5) / 4))
@@ -125,13 +129,33 @@ def apply_xfce(scale):
         Xfconf.shutdown()
 
 
-def polybar_config(text, scale, home):
+def bar_layout(text, scale, width=1920):
+    parser = configparser.ConfigParser(interpolation=None, strict=False)
+    parser.read_string(text)
+    section = next((name for name in parser.sections() if name.startswith('bar/')), None)
+    def pixels(key, default):
+        value = parser.get(section, key, fallback=str(default)) if section else str(default)
+        match = re.fullmatch(r'(\d+)(?:px)?', value.strip())
+        return round(int(match[1]) * scale) if match else round(default * scale)
+    return {'height': pixels('height', 34), 'offset': pixels('offset-y', 8),
+            'gap': round(9 * scale), 'top_padding': pixels('height', 34) + pixels('offset-y', 8) + round(8 * scale),
+            'edge': round(3 * scale), 'compact': width / scale < 1100}
+
+
+def polybar_config(text, scale, home, width=1920):
     pixel_keys = {'height', 'offset-y', 'radius', 'padding-left', 'padding-right'}
+    layout = bar_layout(text, scale, width)
     lines = []
     for line in text.splitlines():
         if line.startswith('[bar/'):
-            lines.extend([line, 'dpi = 96'])
+            lines.extend([line, 'dpi = 96', 'enable-struts = false'])
             continue
+        if re.match(r'^\s*(dpi|enable-struts)\s*=', line):
+            continue
+        if layout['compact'] and line.startswith('modules-left ='):
+            line = 'modules-left = date network'
+        if layout['compact'] and line.startswith('modules-right ='):
+            line = 'modules-right = power'
         match = re.match(r'^(\s*)([\w-]+)(\s*=\s*)(\d+)(px)?$', line)
         if match and match[2] in pixel_keys:
             line = f'{match[1]}{match[2]}{match[3]}{round(int(match[4]) * scale)}{match[5] or ""}'
@@ -153,21 +177,30 @@ def bspwm_settings(home, scale):
     return ''.join(key + ' ' + json.dumps(value) + '\n' for key, value in values.items()) + f'Xft/DPI {round(96 * scale * 1024)}\nGtk/CursorThemeSize {round(24 * scale)}\n'
 
 
-def apply_bspwm(home, folder, scale):
+def apply_bspwm(home, folder, scale, outputs):
+    output = primary_output(outputs)
+    width = output['width'] if output else 1920
     source = home / '.config/polybar/config.ini'
+    layout = bar_layout('', scale, width)
     if source.is_file():
-        contents = polybar_config(source.read_text(), scale, home)
+        original = source.read_text()
+        layout = bar_layout(original, scale, width)
+        contents = polybar_config(original, scale, home, width)
         modules = home / '.config/polybar/modules.ini'
         if modules.is_file():
             scaled_modules = folder / 'polybar-modules.ini'
             scaled_modules.write_text(re.sub(r'(\d+)px', lambda m: str(round(int(m[1]) * scale)) + 'px', modules.read_text()))
             contents = contents.replace(modules.as_posix(), scaled_modules.as_posix())
         (folder / 'polybar.ini').write_text(contents)
-    run(['bspc', 'config', 'top_padding', str(round(50 * scale))])
-    run(['bspc', 'config', 'window_gap', str(round(9 * scale))])
+    for key, value in [('top_padding', layout['top_padding']), ('window_gap', layout['gap']),
+                       ('bottom_padding', layout['edge']), ('left_padding', layout['edge']), ('right_padding', layout['edge'])]:
+        run(['bspc', 'config', key, str(value)])
     launch = home / '.config/polybar/launch.sh'
     if launch.is_file():
-        subprocess.Popen(['bash', str(launch)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        environment = os.environ.copy()
+        if output:
+            environment['MONITOR'] = output['name']
+        subprocess.Popen(['bash', str(launch)], env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 def watch(desktop):
@@ -213,7 +246,7 @@ def watch(desktop):
                                 xsettings = subprocess.Popen(['xsettingsd', '-c', str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                             else:
                                 xsettings.send_signal(signal.SIGHUP)
-                            apply_bspwm(home, folder, scale)
+                            apply_bspwm(home, folder, scale, outputs)
                         state_write(folder, {'desktop': desktop, 'scale': scale, 'dpi': round(96 * scale), 'outputs': outputs})
                         previous = signature
                     elif desktop == 'xfce':
