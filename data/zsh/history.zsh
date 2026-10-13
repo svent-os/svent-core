@@ -1,4 +1,5 @@
 export BROWSER=firefox-esr
+[ ! -r /etc/profile.d/svent-path.sh ] || . /etc/profile.d/svent-path.sh
 autoload -Uz up-line-or-beginning-search down-line-or-beginning-search
 zle -N up-line-or-beginning-search
 zle -N down-line-or-beginning-search

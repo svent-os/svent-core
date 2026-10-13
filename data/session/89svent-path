@@ -1,0 +1,1 @@
+[ ! -r /etc/profile.d/svent-path.sh ] || . /etc/profile.d/svent-path.sh

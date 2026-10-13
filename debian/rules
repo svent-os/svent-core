@@ -4,6 +4,8 @@
 
 override_dh_auto_test:
 	sh -n data/display/90svent-display
+	sh -n data/session/svent-path.sh
+	sh -n data/session/89svent-path
 	python3 -m unittest discover -s tests -v
 	sh tests/test_wallpaper.sh
 

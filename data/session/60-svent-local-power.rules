@@ -1,0 +1,12 @@
+polkit.addRule(function(action, subject) {
+    var operations = [
+        "org.freedesktop.login1.power-off",
+        "org.freedesktop.login1.reboot",
+        "org.freedesktop.login1.halt",
+        "org.freedesktop.login1.suspend",
+        "org.freedesktop.login1.hibernate"
+    ];
+    if (subject.local && subject.active && operations.indexOf(action.id) !== -1) {
+        return polkit.Result.YES;
+    }
+});

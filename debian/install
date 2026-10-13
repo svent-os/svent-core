@@ -14,3 +14,6 @@ bin/svent-rofi usr/bin/
 data/display/90svent-display etc/X11/Xsession.d/
 data/browser/mimeapps.list etc/xdg/
 data/browser/svent-browser.sh etc/profile.d/
+data/session/svent-path.sh etc/profile.d/
+data/session/89svent-path etc/X11/Xsession.d/
+data/session/60-svent-local-power.rules usr/share/polkit-1/rules.d/

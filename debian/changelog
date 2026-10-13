@@ -1,3 +1,10 @@
+svent-core (0.4.16) unstable; urgency=medium
+
+  * Include administrative command directories in user shell PATH.
+  * Permit standard power operations from active local sessions through Polkit.
+
+ -- z1rov <fabian@zirov.net>  Tue, 13 Oct 2026 13:30:00 -0500
+
 svent-core (0.4.15) unstable; urgency=medium
 
   * Apply application font DPI and generate proportional Rofi themes once at BSPWM startup.
