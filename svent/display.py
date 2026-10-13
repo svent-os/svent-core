@@ -176,12 +176,31 @@ def apply_bspwm(home, folder, scale, outputs):
             contents = contents.replace(modules.as_posix(), scaled_modules.as_posix())
         (folder / 'polybar.ini').write_text(contents)
     run(['bspc', 'config', 'top_padding', str(layout['top_padding'])])
+    launch_bar(home, outputs)
+
+
+def launch_bar(home, outputs, original=False):
+    output = primary_output(outputs)
     launch = home / '.config/polybar/launch.sh'
     if launch.is_file():
         environment = os.environ.copy()
         if output:
             environment['MONITOR'] = output['name']
+        if original:
+            environment['SVENT_POLYBAR_CONFIG'] = str(home / '.config/polybar/config.ini')
         subprocess.Popen(['bash', str(launch)], env=environment, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def initialize_bspwm(home, folder):
+    config = settings(home)
+    outputs = detect()
+    if config.get('mode', 'auto') == 'manual':
+        launch_bar(home, outputs, original=True)
+        return
+    scale = float(config.get('scale', choose_scale(outputs)))
+    apply_bspwm(home, folder, scale, outputs)
+    state_write(folder, {'desktop': 'bspwm', 'scale': scale, 'scope': 'bar',
+                         'outputs': outputs, 'sizing': 'session-start'})
 
 
 def apply_display(home, folder, desktop, scale, outputs):
@@ -193,6 +212,9 @@ def apply_display(home, folder, desktop, scale, outputs):
 
 
 def watch(desktop):
+    if desktop == 'bspwm':
+        initialize_bspwm(Path.home(), runtime())
+        return
     import fcntl
     folder = runtime()
     with (folder / 'watch.lock').open('a') as lock:
@@ -206,6 +228,8 @@ def watch(desktop):
         while True:
             try:
                 desktop = (folder / 'desktop').read_text().strip()
+                if desktop != 'xfce':
+                    return
                 config = settings(home)
                 outputs = detect()
                 if config.get('mode', 'auto') == 'manual':
@@ -242,6 +266,10 @@ def main():
         watch(args.desktop)
         return
     folder = runtime()
+    if args.desktop == 'bspwm':
+        (folder / 'desktop').write_text('bspwm')
+        initialize_bspwm(Path.home(), folder)
+        return
     if args.action == 'prepare':
         config = settings(Path.home())
         if config.get('mode', 'auto') == 'manual':

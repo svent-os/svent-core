@@ -3,11 +3,31 @@ import shutil
 import unittest
 from unittest.mock import patch
 import uuid
-from svent.display import apply_display, bar_layout, choose_scale, monitors, polybar_config, settings, xfce_values, xml_values
+from svent.display import apply_display, bar_layout, choose_scale, initialize_bspwm, main, monitors, polybar_config, settings, watch, xfce_values, xml_values
 import xml.etree.ElementTree as ET
 
 
 class DisplayTests(unittest.TestCase):
+    def test_bspwm_initialization_detects_and_applies_only_once(self):
+        outputs = [{'name': 'Virtual1', 'primary': True, 'width': 3840, 'height': 2160}]
+        with patch('svent.display.settings', return_value={'mode': 'auto'}), patch('svent.display.detect', return_value=outputs) as detect, patch('svent.display.apply_bspwm') as bar, patch('svent.display.state_write') as record:
+            initialize_bspwm(Path('/home/example'), Path('/run/example'))
+            detect.assert_called_once()
+            bar.assert_called_once_with(Path('/home/example'), Path('/run/example'), 2, outputs)
+            self.assertEqual(record.call_args.args[1]['sizing'], 'session-start')
+
+    def test_bspwm_watch_action_returns_without_polling(self):
+        with patch('svent.display.runtime'), patch('svent.display.initialize_bspwm') as initialize, patch('svent.display.time.sleep') as sleep:
+            watch('bspwm')
+            initialize.assert_called_once()
+            sleep.assert_not_called()
+
+    def test_bspwm_start_does_not_spawn_a_background_watcher(self):
+        with patch.dict('os.environ', {'DISPLAY': ':77'}), patch('sys.argv', ['display-scale', 'start', 'bspwm']), patch('svent.display.runtime'), patch('svent.display.initialize_bspwm') as initialize, patch('svent.display.subprocess.Popen') as process:
+            main()
+            initialize.assert_called_once()
+            process.assert_not_called()
+
     def test_bspwm_adjustment_does_not_change_application_dpi(self):
         with patch('svent.display.run') as command, patch('svent.display.apply_bspwm') as bar, patch('svent.display.apply_xfce') as xfce:
             apply_display(Path('/home/example'), Path('/run/example'), 'bspwm', 2, [])
