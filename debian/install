@@ -9,5 +9,7 @@ data/zsh/history.zsh usr/share/svent/zsh/
 data/sysctl/90-svent-ping.conf usr/lib/sysctl.d/
 bin/configure-shell usr/libexec/svent/
 bin/configure-browser usr/libexec/svent/
+bin/display-scale usr/libexec/svent/
+data/display/90svent-display etc/X11/Xsession.d/
 data/browser/mimeapps.list etc/xdg/
 data/browser/svent-browser.sh etc/profile.d/

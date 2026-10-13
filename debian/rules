@@ -3,6 +3,7 @@
 	dh $@
 
 override_dh_auto_test:
+	sh -n data/display/90svent-display
 	python3 -m unittest discover -s tests -v
 	sh tests/test_wallpaper.sh
 
@@ -11,5 +12,6 @@ override_dh_fixperms:
 	chmod 0755 debian/svent-core/usr/libexec/svent/gen-menu
 	chmod 0755 debian/svent-core/usr/libexec/svent/configure-shell
 	chmod 0755 debian/svent-core/usr/libexec/svent/configure-browser
+	chmod 0755 debian/svent-core/usr/libexec/svent/display-scale
 	chmod 0755 debian/svent-core/usr/libexec/svent/svent-wallpaper
 	chmod 0755 debian/svent-core/usr/bin/svent debian/svent-core/usr/bin/svent-run

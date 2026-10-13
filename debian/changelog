@@ -1,3 +1,10 @@
+svent-core (0.4.9) unstable; urgency=medium
+
+  * Add shared automatic display scaling based on the primary screen.
+  * Update logical DPI and desktop dimensions when the display changes.
+
+ -- z1rov <fabian@zirov.net>  Mon, 12 Oct 2026 23:40:00 -0500
+
 svent-core (0.4.8) unstable; urgency=medium
 
   * Set Firefox ESR as the default browser for URLs, HTML and desktop helpers.
